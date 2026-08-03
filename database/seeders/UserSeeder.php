@@ -8,13 +8,9 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 class UserSeeder extends Seeder
 {
-    /**
-     * Run the database seeds.
-     */
     public function run(): void
     {
         DB::table('users')->insert([
-            'id_user' => 1,
             'firstName' => 'HECTOR GABRIEL',
             'lastName' => 'SERRALDE',
             'middleName' => 'VALENCIA',
@@ -24,6 +20,18 @@ class UserSeeder extends Seeder
             //   'managmente' => '',
             'idType' => '1',
             'email' => 'hector.serralde@sspc.gob.mx',
+            'password' => Hash::make('password')
+        ]);
+                DB::table('users')->insert([
+            'firstName' => 'GEMA ELIZABETH',
+            'lastName' => 'LOPERENA',
+            'middleName' => 'GUTIERREZ',
+            'nivel' => 'O23',
+            'unidad' => '143',
+            'active' => '1',
+            //   'managmente' => '',
+            'idType' => '1',
+            'email' => 'gema.loperena@sspc.gob.mx',
             'password' => Hash::make('password')
         ]);
     }

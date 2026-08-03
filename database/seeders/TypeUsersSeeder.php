@@ -9,9 +9,6 @@ use Illuminate\Support\Str;
 
 class TypeUsersSeeder extends Seeder
 {
-    /**
-     * Run the database seeds.
-     */
     public function run(): void
     {
         DB::table('typeUser')->insert([
@@ -19,12 +16,12 @@ class TypeUsersSeeder extends Seeder
             'typeUser' => 'COORDINADOR'
         ]);
 
-                DB::table('typeUser')->insert([
+        DB::table('typeUser')->insert([
             'idType' => 2,
             'typeUser' => 'PRESTACIONES'
         ]);
 
-                DB::table('typeUser')->insert([
+        DB::table('typeUser')->insert([
             'idType' => 3,
             'typeUser' => 'ENLACE'
         ]);
