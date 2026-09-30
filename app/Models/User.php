@@ -7,6 +7,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
+
 class User extends Authenticatable
 {
     use HasApiTokens, HasFactory, Notifiable; 
@@ -28,4 +29,17 @@ class User extends Authenticatable
     {
         return $this->belongsTo(TypeUser::class, 'idType', 'idType');
     }
+
+    public function getAttributes()
+{
+    // Cambia las claves de los atributos a minúsculas de forma global para este modelo
+    $attributes = parent::getAttributes();
+    $lowercaseAttributes = [];
+    
+    foreach ($attributes as $key => $value) {
+        $lowercaseAttributes[strtolower($key)] = $value;
+    }
+    
+    return $lowercaseAttributes;
+}
 }

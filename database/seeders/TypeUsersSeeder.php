@@ -13,17 +13,17 @@ class TypeUsersSeeder extends Seeder
     {
         DB::table('typeUser')->insert([
             'idType' => 1,
-            'typeUser' => 'COORDINADOR'
+            'typeUser' => 'Administrador'
         ]);
 
         DB::table('typeUser')->insert([
             'idType' => 2,
-            'typeUser' => 'PRESTACIONES'
+            'typeUser' => 'Gestor de Prestaciones'
         ]);
 
         DB::table('typeUser')->insert([
             'idType' => 3,
-            'typeUser' => 'ENLACE'
+            'typeUser' => 'Enlace'
         ]);
     }
 }

@@ -16,7 +16,6 @@ return new class extends Migration
             $table->string('nivel');
             $table->string('unidad');
             $table->boolean('active');
-            // $table->string('managment');
             $table->unsignedBigInteger('idType');
             $table->foreign('idType')->references('idType')->on('typeUser');
             $table->string('email')->unique();
