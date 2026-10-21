@@ -11,19 +11,34 @@ use Barryvdh\DomPDF\Facade\Pdf;
 
 class AdminController extends Controller
 {
-    public function obtenerRegistrosVales(Request $request)
-    {
+public function obtenerRegistrosVales(Request $request)
+{
+    try {
         $estatus = $request->query('estatus', 'todos');
-        $query = Register::query();
-        if ($estatus !== 'todos') {
-            $query->where('idStatus', $estatus);
+        
+        // Asumiendo que la columna de fecha en Oracle/Eloquent es CREATED_AT o FECHA
+        $query = Register::query()
+            ->whereYear('CREATED_AT', now()->year); // O date('Y')
+
+        // Solo filtra por estatus si no es 'todos'
+        if ($estatus !== 'todos' && $estatus !== null) {
+            $query->where('IDSTATUS', $estatus);
         }
-        $registros = $query->orderBy('idRegister', 'desc')->get();
+
+        $registros = $query->orderBy('IDREGISTER', 'desc')->get();
+
         return response()->json([
             'status' => true,
             'data' => $registros
         ]);
+    } catch (\Exception $e) {
+        \Log::error("Error en obtenerRegistrosVales: " . $e->getMessage());
+        return response()->json([
+            'status' => false,
+            'message' => 'Error al consultar registros: ' . $e->getMessage()
+        ], 500);
     }
+}
 
     public function actualizarEstatusVale(Request $request)
     {
