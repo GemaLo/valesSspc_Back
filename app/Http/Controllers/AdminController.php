@@ -18,7 +18,26 @@ public function obtenerRegistrosVales(Request $request)
         
         // Asumiendo que la columna de fecha en Oracle/Eloquent es CREATED_AT o FECHA
         $query = Register::query()
-            ->whereYear('CREATED_AT', now()->year); // O date('Y')
+            ->select([
+                'IDREGISTER',
+                'NUMEMPLEADO',
+                'NOMEMPLEADO',
+                'APPEMPLEADO',
+                'RFC',
+                'CURP',
+                'UNIDAD',
+                'CARGO',
+                'SS',
+                'NIVEL',
+                'UBICACION',
+                'CLAVE_UR',
+                'MODALIDAD',
+                'CUENTAINICIAL',
+                'IDSTATUS',
+                'CREATED_AT',
+                'UPDATED_AT',
+            ])
+            ->whereYear('CREATED_AT', now()->year);
 
         // Solo filtra por estatus si no es 'todos'
         if ($estatus !== 'todos' && $estatus !== null) {
