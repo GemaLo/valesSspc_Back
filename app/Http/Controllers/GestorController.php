@@ -12,7 +12,7 @@ class GestorController extends Controller
     public function getEmpleados(Request $request)
 {
     $numEmpleado = trim($request->input('num_empleado', ''));
-    $origen = $request->input('origen', 'ambos'); // 'ambos', 'SC' o 'GN'
+    $origen = $request->input('origen', 'ambos');
 
     if (empty($numEmpleado)) {
         return response()->json([
@@ -24,7 +24,6 @@ class GestorController extends Controller
     $empleadosCentral = collect();
     $empleadosGn = collect();
 
-    // Consultar Sector Central si se seleccionó 'ambos' o 'SC'
     if ($origen === 'ambos' || $origen === 'SC') {
         $empleadosCentral = DB::connection('oracle_secondary')
             ->table('EMPLEADOS_PRESTACIONES')
@@ -33,7 +32,6 @@ class GestorController extends Controller
             ->get();
     }
 
-    // Consultar GN si se seleccionó 'ambos' o 'GN'
     if ($origen === 'ambos' || $origen === 'GN') {
         $empleadosGn = DB::connection('oracle_gn')
             ->table('EMPLEADOS_PRESTACIONES_GN')
@@ -74,7 +72,6 @@ class GestorController extends Controller
             $seleccionados = $seleccionados->concat($gn);
         }
 
-        // Generar archivo CSV descargable
         $filename = "empleados_seleccionados_" . date('Y-m-d_H-i-s') . ".csv";
         
         $headers = [
@@ -87,10 +84,8 @@ class GestorController extends Controller
 
         $callback = function() use ($seleccionados) {
             $file = fopen('php://output', 'w');
-            // Añadir BOM para que Excel reconozca tildes y caracteres especiales UTF-8
             fprintf($file, chr(0xEF).chr(0xBB).chr(0xBF));
             
-            // Cabeceras del CSV
             fputcsv($file, ['ID', 'Nombre', 'RFC', 'CURP', 'Nivel', 'Origen']);
 
             foreach ($seleccionados as $emp) {
@@ -123,21 +118,20 @@ class GestorController extends Controller
 
     try {
         foreach ($empleados as $emp) {
-            // Mapeamos los campos del objeto de React a las columnas de tu modelo Register
             Register::create([
                 'numEmpleado' => $emp['num_empleado'] ?? null,
                 'nomEmpleado' => $emp['nombre'] ?? null,
                 'appEmpleado' => trim(($emp['apellido_paterno'] ?? '') . ' ' . ($emp['apellido_materno'] ?? '')),
                 'rfc'         => $emp['rfc'] ?? null,
                 'curp'        => $emp['curp'] ?? null,
-                'unidad'      => $emp['nivel'] ?? null, // O el campo que corresponda a la unidad
+                'unidad'      => $emp['nivel'] ?? null, 
                 'cargo'       => $emp['cargo'] ?? null,
                 'ss'          => $emp['ss'] ?? null,
                 'nivel'       => $emp['nivel'] ?? null,
                 'ubicacion'   => $emp['domicilio'] ?? null,
                 'clave_UR'    => $emp['clave_ur'] ?? null,
                 'modalidad'   => $emp['modalidad'] ?? null,
-                'idStatus'    => 1 // Ajusta el estatus inicial según tu lógica de negocio
+                'idStatus'    => 1 
             ]);
         }
 

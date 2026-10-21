@@ -24,5 +24,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/gestor/vales/registrados', [AdminController::class, 'obtenerRegistrosVales']);
     Route::post('/gestor/vales/actualizar-estatus', [AdminController::class, 'actualizarEstatusVale']);
+    Route::post('/gestor/vales/cargar-tarjetas', [AdminController::class, 'cargarTarjetas']);
+    Route::get('/gestor/vales/descargar-formatos/{idRegister}', [AdminController::class, 'descargarFormatos']);
 
 });
