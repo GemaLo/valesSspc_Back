@@ -27,7 +27,17 @@ class GestorController extends Controller
     if ($origen === 'ambos' || $origen === 'SC') {
         $empleadosCentral = DB::connection('oracle_secondary')
             ->table('EMPLEADOS_PRESTACIONES')
-            ->select('num_empleado', 'nombre', 'apellido_paterno', 'apellido_materno',  'rfc', 'curp', 'nivel', DB::raw("'Sector Central' as origen"))
+            ->select(
+    'num_empleado',
+    'nombre',
+    'apellido_paterno',
+    'apellido_materno',
+    'rfc',
+    'curp',
+    'unidad',
+    'nivel',
+    DB::raw("'Sector Central' as origen")
+)
             ->where('num_empleado', 'like', "%{$numEmpleado}%")
             ->get();
     }
@@ -35,7 +45,15 @@ class GestorController extends Controller
     if ($origen === 'ambos' || $origen === 'GN') {
         $empleadosGn = DB::connection('oracle_gn')
             ->table('EMPLEADOS_PRESTACIONES_GN')
-            ->select('num_empleado', 'nombre', 'rfc', 'curp', 'nivel', DB::raw("'GN' as origen"))
+->select(
+    'num_empleado',
+    'nombre',
+    'rfc',
+    'curp',
+    'unidad',
+    'nivel',
+    DB::raw("'GN' as origen")
+)
             ->where('num_empleado', 'like', "%{$numEmpleado}%")
             ->get();
     }
@@ -107,47 +125,118 @@ class GestorController extends Controller
 {
     $empleados = $request->input('empleados', []);
 
-    if (empty($empleados)) {
+    if (!is_array($empleados) || count($empleados) === 0) {
         return response()->json([
             'status' => false,
-            'message' => 'No se recibieron empleados para registrar.'
+            'message' => 'No se recibieron empleados para registrar.',
         ], 400);
     }
 
-    DB::connection('oracle_primary')->beginTransaction();
+    if (count($empleados) > 5000) {
+        return response()->json([
+            'status' => false,
+            'message' => 'El archivo supera el límite de 5,000 registros por carga.',
+        ], 422);
+    }
 
-    try {
-        foreach ($empleados as $emp) {
-            Register::create([
-                'numEmpleado' => $emp['num_empleado'] ?? null,
-                'nomEmpleado' => $emp['nombre'] ?? null,
-                'appEmpleado' => trim(($emp['apellido_paterno'] ?? '') . ' ' . ($emp['apellido_materno'] ?? '')),
-                'rfc'         => $emp['rfc'] ?? null,
-                'curp'        => $emp['curp'] ?? null,
-                'unidad'      => $emp['nivel'] ?? null, 
-                'cargo'       => $emp['cargo'] ?? null,
-                'ss'          => $emp['ss'] ?? null,
-                'nivel'       => $emp['nivel'] ?? null,
-                'ubicacion'   => $emp['domicilio'] ?? null,
-                'clave_UR'    => $emp['clave_ur'] ?? null,
-                'modalidad'   => $emp['modalidad'] ?? null,
-                'idStatus'    => 1 
-            ]);
+    $registros = [];
+    $errores = [];
+
+    foreach ($empleados as $index => $emp) {
+        if (!is_array($emp)) {
+            $errores[] = 'La fila ' . ($index + 1) . ' no tiene un formato válido.';
+            continue;
         }
 
-        DB::connection('oracle_primary')->commit();
+        $nombreCompleto = trim((string) ($emp['nombre_completo'] ?? ''));
+
+        if ($nombreCompleto === '') {
+            $nombreCompleto = trim(implode(' ', array_filter([
+                $emp['nombre'] ?? '',
+                $emp['apellido_paterno'] ?? '',
+                $emp['apellido_materno'] ?? '',
+            ], fn ($valor) => trim((string) $valor) !== '')));
+        }
+
+        // Compatibilidad con los registros seleccionados desde la búsqueda.
+$ur = trim((string) (
+    $emp['ur']
+    ?? $emp['unidad']
+    ?? $emp['clave_ur']
+    ?? ''
+));
+
+        $rfc = strtoupper(trim((string) ($emp['rfc'] ?? '')));
+        $curp = strtoupper(trim((string) ($emp['curp'] ?? '')));
+
+        if ($nombreCompleto === '' || $ur === '' || $rfc === '' || $curp === '') {
+            $errores[] = 'La fila ' . ($index + 1)
+                . ' requiere nombre, UR, RFC y CURP.';
+            continue;
+        }
+
+        $origenEntrada = strtoupper(trim((string) ($emp['origen'] ?? '')));
+        $origen = in_array($origenEntrada, ['SC', 'SECTOR CENTRAL'], true)
+            ? 'SC'
+            : 'GN';
+
+        $valorNullable = static function ($valor): ?string {
+            if ($valor === null || trim((string) $valor) === '') {
+                return null;
+            }
+
+            return trim((string) $valor);
+        };
+
+        $registros[] = [
+            'NOMBRECOMPLETO' => $nombreCompleto,
+            'NUMEMPLEADO' => $valorNullable($emp['num_empleado'] ?? null),
+            'NOMEMPLEADO' => $valorNullable($emp['nombre'] ?? null),
+            'APPEMPLEADO' => $valorNullable($emp['apellido_paterno'] ?? null),
+            'APMEMPLEADO' => $valorNullable($emp['apellido_materno'] ?? null),
+            'UR' => $ur,
+            'RFC' => $rfc,
+            'CURP' => $curp,
+            'NSS' => $valorNullable($emp['nss'] ?? $emp['ss'] ?? null),
+            'NIVEL' => $valorNullable($emp['nivel'] ?? null),
+            'PUESTO' => $valorNullable($emp['puesto'] ?? $emp['cargo'] ?? null),
+            'UBICACION' => $valorNullable($emp['ubicacion'] ?? $emp['domicilio'] ?? null),
+            'IDENLACE' => $valorNullable($emp['enlace'] ?? null),
+            'CLAVE' => $valorNullable($emp['clave'] ?? $emp['clave_ur'] ?? null),
+            'CUENTAINICIAL' => $valorNullable($emp['cuenta_inicial'] ?? null),
+            'MODALIDAD' => $valorNullable($emp['modalidad'] ?? null),
+            'IDSTATUS' => 1,
+            'ORIGEN' => $origen,
+            'PENSION' => $valorNullable($emp['pension'] ?? null),
+        ];
+    }
+
+    if (!empty($errores)) {
+        return response()->json([
+            'status' => false,
+            'message' => 'Hay filas incompletas. No se guardó ningún registro.',
+            'errors' => array_slice($errores, 0, 20),
+        ], 422);
+    }
+
+    try {
+        DB::connection('oracle_primary')->transaction(function () use ($registros) {
+            foreach ($registros as $registro) {
+                Register::create($registro);
+            }
+        });
 
         return response()->json([
             'status' => true,
-            'message' => 'Registros guardados correctamente.'
+            'message' => 'Registros guardados correctamente.',
+            'total' => count($registros),
         ]);
+    } catch (\Throwable $e) {
+        report($e);
 
-    } catch (\Exception $e) {
-        DB::connection('oracle_primary')->rollBack();
-        
         return response()->json([
             'status' => false,
-            'message' => 'Error al guardar en la base de datos: ' . $e->getMessage()
+            'message' => 'Ocurrió un error al guardar los registros.',
         ], 500);
     }
 }

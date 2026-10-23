@@ -130,6 +130,40 @@
     </style>
 </head>
 <body>
+    @php
+        $nombreCompleto = $empleado->NOMBRECOMPLETO
+            ?? $empleado->nombrecompleto
+            ?? $empleado->nombreCompleto
+            ?? trim(
+                ($empleado->NOMEMPLEADO ?? $empleado->nomEmpleado ?? $empleado->nomempleado ?? '')
+                . ' '
+                . ($empleado->APPEMPLEADO ?? $empleado->appEmpleado ?? $empleado->appempleado ?? '')
+            );
+
+        $nombreCompleto = strtoupper($nombreCompleto ?: '-');
+
+        $numeroEmpleado = $empleado->NUMEMPLEADO
+            ?? $empleado->numEmpleado
+            ?? $empleado->numempleado
+            ?? '-';
+
+        $cuentaInicial = $empleado->CUENTAINICIAL
+            ?? $empleado->cuentaInicial
+            ?? $empleado->cuentainicial
+            ?? 'PENDIENTE DE ASIGNAR';
+
+        $cargo = $empleado->PUESTO
+            ?? $empleado->cargo
+            ?? '-';
+
+        $unidad = $empleado->UR
+            ?? $empleado->unidad
+            ?? '-';
+
+        $rfc = $empleado->RFC
+            ?? $empleado->rfc
+            ?? '-';
+    @endphp
 
     <!-- ========================================================================= -->
     <!-- HOJA 1: INTEGRANTE                                                        -->
@@ -164,7 +198,7 @@
                 </tr>
                 <tr>
                     <td>{{ date('d/m/Y') }}</td>
-                    <td class="bold" style="font-size: 10.5px;">{{ strtoupper(($empleado->nomEmpleado ?? $empleado->nomempleado ?? '') . ' ' . ($empleado->appEmpleado ?? $empleado->appempleado ?? '')) }}</td>
+                    <td class="bold" style="font-size: 10.5px;">{{ $nombreCompleto }}</td>
                 </tr>
             </table>
 
@@ -176,9 +210,9 @@
                     <td class="bold" style="width: 15%;">IMPORTE</td>
                 </tr>
                 <tr>
-                    <td class="text-center">{{ $empleado->numEmpleado ?? $empleado->numempleado ?? '-' }}</td>
-                    <td>{{ $empleado->cargo ?? '-' }}</td>
-                    <td class="bold text-center">{{ $empleado->rfc }}</td>
+                    <td class="text-center">{{ $numeroEmpleado }}</td>
+                    <td>{{ $cargo }}</td>
+                    <td class="bold text-center">{{ $rfc }}</td>
                     <td class="bold text-right">$14,900.00</td>
                 </tr>
             </table>
@@ -186,7 +220,7 @@
             <table class="excel-grid" style="margin-top: -8px;">
                 <tr>
                     <td class="bold" style="width: 20%;">ADSCRIPCIÓN</td>
-                    <td style="width: 80%; font-size: 10px;">{{ $empleado->unidad ?? '-' }}</td>
+                    <td style="width: 80%; font-size: 10px;">{{ $unidad }}</td>
                 </tr>
             </table>
 
@@ -198,7 +232,7 @@
                 <tr>
                     <td style="padding: 10px;">TARJETA ELECTRÓNICA DE FIN DE AÑO</td>
                     <td class="bold text-center" style="font-size: 13px; background-color: #f5f5f5; padding: 10px;">
-                        {{ $empleado->cuentaInicial ?? $empleado->cuentainicial ?? 'PENDIENTE DE ASIGNAR' }}
+                        {{ $cuentaInicial }}
                     </td>
                 </tr>
             </table>
@@ -265,7 +299,7 @@
                 </tr>
                 <tr>
                     <td>{{ date('d/m/Y') }}</td>
-                    <td class="bold" style="font-size: 10.5px;">{{ strtoupper(($empleado->nomEmpleado ?? $empleado->nomempleado ?? '') . ' ' . ($empleado->appEmpleado ?? $empleado->appempleado ?? '')) }}</td>
+                    <td class="bold" style="font-size: 10.5px;">{{ $nombreCompleto }}</td>
                 </tr>
             </table>
 
@@ -277,9 +311,9 @@
                     <td class="bold" style="width: 15%;">IMPORTE</td>
                 </tr>
                 <tr>
-                    <td class="text-center">{{ $empleado->numEmpleado ?? $empleado->numempleado ?? '-' }}</td>
-                    <td>{{ $empleado->cargo ?? '-' }}</td>
-                    <td class="bold text-center">{{ $empleado->rfc }}</td>
+                    <td class="text-center">{{ $numeroEmpleado }}</td>
+                    <td>{{ $cargo }}</td>
+                    <td class="bold text-center">{{ $rfc }}</td>
                     <td class="bold text-right">$14,900.00</td>
                 </tr>
             </table>
@@ -287,7 +321,7 @@
             <table class="excel-grid" style="margin-top: -8px;">
                 <tr>
                     <td class="bold" style="width: 20%;">ADSCRIPCIÓN</td>
-                    <td style="width: 80%; font-size: 10px;">{{ $empleado->unidad ?? '-' }}</td>
+                    <td style="width: 80%; font-size: 10px;">{{ $unidad }}</td>
                 </tr>
             </table>
 
@@ -299,7 +333,7 @@
                 <tr>
                     <td style="padding: 10px;">TARJETA ELECTRÓNICA (PENSIÓN ALIMENTICIA)</td>
                     <td class="bold text-center" style="font-size: 13px; background-color: #f5f5f5; padding: 10px;">
-                        {{ $empleado->cuentaInicial ?? $empleado->cuentainicial ?? 'PENDIENTE DE ASIGNAR' }}
+                        {{ $cuentaInicial }}
                     </td>
                 </tr>
             </table>
@@ -366,7 +400,7 @@
                 </tr>
                 <tr>
                     <td>{{ date('d/m/Y') }}</td>
-                    <td class="bold" style="font-size: 10.5px;">{{ strtoupper(($empleado->nomEmpleado ?? $empleado->nomempleado ?? '') . ' ' . ($empleado->appEmpleado ?? $empleado->appempleado ?? '')) }}</td>
+                    <td class="bold" style="font-size: 10.5px;">{{ $nombreCompleto }}</td>
                 </tr>
             </table>
 
@@ -378,9 +412,9 @@
                     <td class="bold" style="width: 15%;">IMPORTE</td>
                 </tr>
                 <tr>
-                    <td class="text-center">{{ $empleado->numEmpleado ?? $empleado->numempleado ?? '-' }}</td>
-                    <td>{{ $empleado->cargo ?? '-' }}</td>
-                    <td class="bold text-center">{{ $empleado->rfc }}</td>
+                    <td class="text-center">{{ $numeroEmpleado }}</td>
+                    <td>{{ $cargo }}</td>
+                    <td class="bold text-center">{{ $rfc }}</td>
                     <td class="bold text-right">$14,900.00</td>
                 </tr>
             </table>
@@ -389,7 +423,7 @@
                 <tr>
                     <td class="bold" style="width: 20%;">ADSCRIPCIÓN</td>
                     <td style="width: 80%; font-size: 10px;">
-                        {{ $empleado->unidad ?? '-' }}<br>
+                        {{ $unidad }}<br>
                         SECRETARIA DE SEGURIDAD Y PROTECCIÓN CIUDADANA
                     </td>
                 </tr>
@@ -403,7 +437,7 @@
                 <tr>
                     <td style="padding: 10px;">TARJETA ELECTRÓNICA DE REPOSICIÓN</td>
                     <td class="bold text-center" style="font-size: 13px; background-color: #f5f5f5; padding: 10px;">
-                        {{ $empleado->cuentaInicial ?? $empleado->cuentainicial ?? 'PENDIENTE DE ASIGNAR' }}
+                        {{ $cuentaInicial }}
                     </td>
                 </tr>
             </table>
@@ -434,6 +468,5 @@
             </div>
         </div>
     </div>
-
 </body>
 </html>

@@ -7,7 +7,8 @@ use App\Models\Card;
 use Illuminate\Http\Request;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use Illuminate\Support\Facades\DB;
-use Barryvdh\DomPDF\Facade\Pdf; 
+use Illuminate\Support\Facades\Log;
+use Barryvdh\DomPDF\Facade\Pdf;
 
 class AdminController extends Controller
 {
@@ -19,24 +20,29 @@ public function obtenerRegistrosVales(Request $request)
         // Asumiendo que la columna de fecha en Oracle/Eloquent es CREATED_AT o FECHA
         $query = Register::query()
             ->select([
-                'IDREGISTER',
-                'NUMEMPLEADO',
-                'NOMEMPLEADO',
-                'APPEMPLEADO',
-                'RFC',
-                'CURP',
-                'UNIDAD',
-                'CARGO',
-                'SS',
-                'NIVEL',
-                'UBICACION',
-                'CLAVE_UR',
-                'MODALIDAD',
-                'CUENTAINICIAL',
-                'IDSTATUS',
-                'CREATED_AT',
-                'UPDATED_AT',
-            ])
+    'IDREGISTER',
+    'NOMBRECOMPLETO',
+    'NUMEMPLEADO',
+    'NOMEMPLEADO',
+    'APPEMPLEADO',
+    'APMEMPLEADO',
+    'UR',
+    'RFC',
+    'CURP',
+    'NSS',
+    'NIVEL',
+    'PUESTO',
+    'UBICACION',
+    'IDENLACE',
+    'CLAVE',
+    'CUENTAINICIAL',
+    'MODALIDAD',
+    'IDSTATUS',
+    'ORIGEN',
+    'PENSION',
+    'CREATED_AT',
+    'UPDATED_AT',
+])
             ->whereYear('CREATED_AT', now()->year);
 
         // Solo filtra por estatus si no es 'todos'
@@ -173,121 +179,139 @@ public function cargarTarjetas(Request $request)
     ]);
 
     $file = $request->file('archivo');
-    $path = $file->getRealPath();
     $extension = strtolower($file->getClientOriginalExtension());
-
-    $actualizados = 0;
-    $noEncontrados = 0;
     $filas = [];
 
-    // 1. Lectura del archivo (CSV / TXT)
-    if ($extension === 'csv' || $extension === 'txt') {
-        $contenido = file_get_contents($path);
-        $delimitador = (substr_count($contenido, ';') > substr_count($contenido, ',')) ? ';' : ',';
+    try {
+        if (in_array($extension, ['csv', 'txt'], true)) {
+            $path = $file->getRealPath();
+            $contenido = file_get_contents($path);
+            $delimitador = substr_count($contenido, ';') > substr_count($contenido, ',')
+                ? ';'
+                : ',';
 
-        if (($handle = fopen($path, 'r')) !== FALSE) {
-            $rowNumber = 0;
-            while (($data = fgetcsv($handle, 1000, $delimitador)) !== FALSE) {
-                $rowNumber++;
-                if ($rowNumber === 1) continue; // Omitir encabezados
+            $handle = fopen($path, 'r');
+
+            if ($handle === false) {
+                throw new \RuntimeException('No se pudo leer el archivo.');
+            }
+
+            $numeroFila = 0;
+
+            while (($data = fgetcsv($handle, 0, $delimitador)) !== false) {
+                if ($numeroFila++ === 0) {
+                    continue; // Omitir encabezados
+                }
 
                 $filas[] = [
-                    'cuenta' => isset($data[1]) ? trim($data[1]) : null,
-                    'rfc'    => isset($data[3]) ? trim(strtoupper($data[3])) : null,
-                    'curp'   => isset($data[4]) ? trim(strtoupper($data[4])) : null,
+                    'cuenta' => isset($data[1]) ? trim((string) $data[1]) : null,
+                    'rfc' => isset($data[3]) ? strtoupper(trim((string) $data[3])) : null,
+                    'curp' => isset($data[4]) ? strtoupper(trim((string) $data[4])) : null,
                 ];
             }
+
             fclose($handle);
-        }
-    } 
-    // Si usas Excel nativo (.xlsx) con Maatwebsite/Excel
-    else {
-        $dataExcel = \Maatwebsite\Excel\Facades\Excel::toArray([], $file);
-        if (!empty($dataExcel[0])) {
-            foreach ($dataExcel[0] as $index => $row) {
-                if ($index === 0) continue;
+        } else {
+            $spreadsheet = IOFactory::load($file->getRealPath());
+            $hoja = $spreadsheet->getActiveSheet();
+
+            foreach ($hoja->toArray(null, true, true, false) as $indice => $row) {
+                if ($indice === 0) {
+                    continue; // Omitir encabezados
+                }
+
                 $filas[] = [
-                    'cuenta' => isset($row[1]) ? trim($row[1]) : null,
-                    'rfc'    => isset($row[3]) ? trim(strtoupper($row[3])) : null,
-                    'curp'   => isset($row[4]) ? trim(strtoupper($row[4])) : null,
+                    'cuenta' => isset($row[1]) ? trim((string) $row[1]) : null,
+                    'rfc' => isset($row[3]) ? strtoupper(trim((string) $row[3])) : null,
+                    'curp' => isset($row[4]) ? strtoupper(trim((string) $row[4])) : null,
                 ];
             }
         }
-    }
 
-    DB::connection('oracle_primary')->beginTransaction();
+        $actualizados = 0;
+        $noEncontrados = 0;
 
-try {
-    foreach ($filas as $fila) {
-        $cuenta = $fila['cuenta'];
-        $rfc    = $fila['rfc'];
-        $curp   = $fila['curp'];
+        DB::connection('oracle_primary')->transaction(function () use (
+            $filas,
+            &$actualizados,
+            &$noEncontrados
+        ) {
+            foreach ($filas as $fila) {
+                $cuenta = $fila['cuenta'];
+                $rfc = $fila['rfc'];
+                $curp = $fila['curp'];
 
-        if (!$cuenta || (!$rfc && !$curp)) {
-            continue;
-        }
-
-        $filasAfectadas = DB::connection('oracle_primary')
-            ->table('registers')
-            ->where(function ($query) use ($rfc, $curp) {
-                if ($rfc) {
-                    $query->orWhere('rfc', $rfc);
+                if (!$cuenta || (!$rfc && !$curp)) {
+                    continue;
                 }
-                if ($curp) {
-                    $query->orWhere('curp', $curp);
+
+                $consulta = DB::connection('oracle_primary')
+                    ->table('registers')
+                    ->where(function ($query) use ($rfc, $curp) {
+                        if ($rfc) {
+                            $query->orWhereRaw('UPPER(RFC) = ?', [$rfc]);
+                        }
+
+                        if ($curp) {
+                            $query->orWhereRaw('UPPER(CURP) = ?', [$curp]);
+                        }
+                    });
+
+                $afectados = $consulta->update([
+                    'CUENTAINICIAL' => $cuenta,
+                ]);
+
+                if ($afectados > 0) {
+                    $actualizados++;
+                } else {
+                    $noEncontrados++;
                 }
-            })
-            ->update(['cuentainicial' => $cuenta]);
+            }
+        });
 
-        if ($filasAfectadas > 0) {
-            $actualizados++;
-            \Log::info("Cuenta {$cuenta} asignada exitosamente a RFC: {$rfc} / CURP: {$curp}");
-        } else {
-            $noEncontrados++;
-            \Log::info("No se encontró registro para actualizar con RFC: {$rfc} / CURP: {$curp}");
-        }
+        return response()->json([
+            'status' => true,
+            'message' => "Carga exitosa. Cuentas actualizadas: {$actualizados}. No encontrados en BD: {$noEncontrados}.",
+            'actualizados' => $actualizados,
+            'noEncontrados' => $noEncontrados,
+        ]);
+    } catch (\Throwable $e) {
+        Log::error('Error al actualizar tarjetas en Oracle: ' . $e->getMessage());
+
+        return response()->json([
+            'status' => false,
+            'message' => 'Error al procesar el archivo: ' . $e->getMessage(),
+        ], 500);
     }
-
-    DB::connection('oracle_primary')->commit();
-
-} catch (\Exception $e) {
-    DB::connection('oracle_primary')->rollBack();
-    \Log::error("Error crítico al actualizar tarjetas en Oracle: " . $e->getMessage());
-
-    return response()->json([
-        'status' => false,
-        'message' => 'Error en la base de datos: ' . $e->getMessage()
-    ], 500);
 }
 
-return response()->json([
-    'status' => true,
-    'message' => "Carga exitosa. Cuentas actualizadas: {$actualizados}. No encontrados en BD: {$noEncontrados}."
-]);
-}
 public function descargarFormatos($idRegister)
-    {
-        if (!$idRegister || $idRegister === 'undefined') {
-            return response()->json([
-                'status' => false,
-                'message' => 'El ID del registro es inválido.'
-            ], 400);
-        }
-
-        $empleado = Register::where('idRegister', $idRegister)
-            ->orWhere('idregister', $idRegister)
-            ->first();
-
-        if (!$empleado) {
-            return response()->json([
-                'status' => false,
-                'message' => 'No se encontró el registro en la base de datos.'
-            ], 404);
-        }
-
-        $pdf = Pdf::loadView('pdf.formatos_vales', compact('empleado'));
-        $pdf->setPaper('letter', 'portrait');
-
-        return $pdf->stream("formatos_vales_{$empleado->numEmpleado}.pdf");
+{
+    if (!$idRegister || $idRegister === 'undefined') {
+        return response()->json([
+            'status' => false,
+            'message' => 'El ID del registro es inválido.',
+        ], 400);
     }
+
+    $empleado = Register::find($idRegister);
+
+    if (!$empleado) {
+        return response()->json([
+            'status' => false,
+            'message' => 'No se encontró el registro en la base de datos.',
+        ], 404);
+    }
+
+    $pdf = Pdf::loadView('pdf.formatos_vales', compact('empleado'));
+    $pdf->setPaper('letter', 'portrait');
+
+    $numeroEmpleado =
+        $empleado->NUMEMPLEADO
+        ?? $empleado->numempleado
+        ?? $empleado->numEmpleado
+        ?? $idRegister;
+
+    return $pdf->stream("formatos_vales_{$numeroEmpleado}.pdf");
+}
 }

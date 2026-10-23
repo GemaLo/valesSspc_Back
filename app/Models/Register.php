@@ -8,26 +8,29 @@ class Register extends Model
     protected $connection = 'oracle_primary';
     protected $table = 'registers';
     
-    // Mapeamos exactamente la llave primaria en mayúsculas
     protected $primaryKey = 'IDREGISTER';
     
-    public $timestamps = false; // O true si usas CREATED_AT / UPDATED_AT
+    public $timestamps = true; 
 
-    // Si quieres mapear los campos para usarlos cómodamente en Laravel:
     protected $fillable = [
+        'NOMBRECOMPLETO',
         'NUMEMPLEADO',
         'NOMEMPLEADO',
         'APPEMPLEADO',
+        'APMEMPLEADO',
+        'UR',
         'RFC',
         'CURP',
-        'UNIDAD',
-        'CARGO',
-        'SS',
+        'NSS',
         'NIVEL',
+        'PUESTO',
         'UBICACION',
-        'CLAVE_UR',
-        'MODALIDAD',
+        'IDENLACE',
+        'CLAVE',
         'CUENTAINICIAL',
-        'IDSTATUS'
+        'MODALIDAD',
+        'IDSTATUS',
+        'ORIGEN',
+        'PENSION'
     ];
 }
