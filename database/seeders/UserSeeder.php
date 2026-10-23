@@ -12,6 +12,7 @@ class UserSeeder extends Seeder
     public function run(): void
     {
         DB::table('users')->insert([
+            'numEmpleado' => '727201',
             'firstName' => 'GEMA ELIZABETH',
             'lastName' => 'LOPERENA',
             'middleName' => 'GUTIERREZ',
@@ -19,10 +20,12 @@ class UserSeeder extends Seeder
             'unidad' => '143',
             'active' => '1',
             'idType' => '1',
+            'origen' => 'SSPC',
             'email' => 'gema.loperena@sspc.gob.mx',
             'password' => Hash::make('password')
         ]);
         DB::table('users')->insert([
+            'numEmpleado' => '724778',
             'firstName' => 'ANA LAURA',
             'lastName' => 'RODRIGUEZ',
             'middleName' => 'FLORES',
@@ -30,10 +33,12 @@ class UserSeeder extends Seeder
             'unidad' => '142',
             'active' => '1',
             'idType' => '2',
+            'origen' => 'SSPC',
             'email' => 'ana.rodriguezf@sspc.gob.mx',
             'password' => Hash::make('password')
         ]);
         DB::table('users')->insert([
+            'numEmpleado' => '711126',
             'firstName' => 'HECTOR GABRIEL',
             'lastName' => 'SERRALDE',
             'middleName' => 'VALENCIA',
@@ -41,6 +46,7 @@ class UserSeeder extends Seeder
             'unidad' => '142',
             'active' => '1',
             'idType' => '3',
+            'origen' => 'SSPC',
             'email' => 'hector.serralde@sspc.gob.mx',
             'password' => Hash::make('password')
         ]);

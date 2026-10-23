@@ -17,8 +17,8 @@ class User extends Authenticatable
     protected $primaryKey = 'id_user';
 
     protected $fillable = [
-        'firstName', 'lastName', 'middleName', 'nivel', 
-        'unidad', 'active', 'idType', 'email', 'password'
+        'numEmpleado', 'firstName', 'lastName', 'middleName', 'nivel', 
+        'unidad', 'active', 'idType', 'email', 'password', 'origen'
     ];
 
     protected $hidden = [
@@ -32,7 +32,6 @@ class User extends Authenticatable
 
     public function getAttributes()
 {
-    // Cambia las claves de los atributos a minúsculas de forma global para este modelo
     $attributes = parent::getAttributes();
     $lowercaseAttributes = [];
     

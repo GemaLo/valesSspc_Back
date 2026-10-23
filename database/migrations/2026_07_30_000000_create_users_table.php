@@ -10,6 +10,7 @@ return new class extends Migration
     {
         Schema::create('users', function (Blueprint $table) {
             $table->id('id_user');
+            $table->string('numEmpleado');
             $table->string('firstName');
             $table->string('lastName');
             $table->string('middleName');
@@ -19,6 +20,7 @@ return new class extends Migration
             $table->unsignedBigInteger('idType');
             $table->foreign('idType')->references('idType')->on('typeUser');
             $table->string('email')->unique();
+            $table->string('origen');
             $table->string('password');
             $table->rememberToken();
             $table->timestamps();

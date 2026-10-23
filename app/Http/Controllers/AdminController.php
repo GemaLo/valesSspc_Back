@@ -2,68 +2,69 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Register;
+use App\Models\User;
 use App\Models\Card;
+use App\Models\Register;
 use Illuminate\Http\Request;
-use PhpOffice\PhpSpreadsheet\IOFactory;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
+use PhpOffice\PhpSpreadsheet\IOFactory;
+use Yajra\DataTables\Facades\DataTables;
 
 class AdminController extends Controller
 {
-public function obtenerRegistrosVales(Request $request)
-{
-    try {
-        $estatus = $request->query('estatus', 'todos');
-        
-        // Asumiendo que la columna de fecha en Oracle/Eloquent es CREATED_AT o FECHA
-        $query = Register::query()
-            ->select([
-    'IDREGISTER',
-    'NOMBRECOMPLETO',
-    'NUMEMPLEADO',
-    'NOMEMPLEADO',
-    'APPEMPLEADO',
-    'APMEMPLEADO',
-    'UR',
-    'RFC',
-    'CURP',
-    'NSS',
-    'NIVEL',
-    'PUESTO',
-    'UBICACION',
-    'IDENLACE',
-    'CLAVE',
-    'CUENTAINICIAL',
-    'MODALIDAD',
-    'IDSTATUS',
-    'ORIGEN',
-    'PENSION',
-    'CREATED_AT',
-    'UPDATED_AT',
-])
-            ->whereYear('CREATED_AT', now()->year);
+    public function obtenerRegistrosVales(Request $request)
+    {
+        try {
+            $estatus = $request->query('estatus', 'todos');
 
-        // Solo filtra por estatus si no es 'todos'
-        if ($estatus !== 'todos' && $estatus !== null) {
-            $query->where('IDSTATUS', $estatus);
+            $query = Register::query()
+                ->select([
+                    'IDREGISTER',
+                    'NOMBRECOMPLETO',
+                    'NUMEMPLEADO',
+                    'NOMEMPLEADO',
+                    'APPEMPLEADO',
+                    'APMEMPLEADO',
+                    'UR',
+                    'RFC',
+                    'CURP',
+                    'NSS',
+                    'NIVEL',
+                    'PUESTO',
+                    'UBICACION',
+                    'IDENLACE',
+                    'CLAVE',
+                    'CUENTAINICIAL',
+                    'MODALIDAD',
+                    'IDSTATUS',
+                    'ORIGEN',
+                    'PENSION',
+                    'CREATED_AT',
+                    'UPDATED_AT',
+                ])
+                ->whereYear('CREATED_AT', now()->year);
+            if ($estatus !== 'todos' && $estatus !== null) {
+                $query->where('IDSTATUS', $estatus);
+            }
+
+            $registros = $query->orderBy('IDREGISTER', 'desc')->get();
+
+            return response()->json([
+                'status' => true,
+                'data' => $registros
+            ]);
+        } catch (\Exception $e) {
+            \Log::error("Error en obtenerRegistrosVales: " . $e->getMessage());
+            return response()->json([
+                'status' => false,
+                'message' => 'Error al consultar registros: ' . $e->getMessage()
+            ], 500);
         }
-
-        $registros = $query->orderBy('IDREGISTER', 'desc')->get();
-
-        return response()->json([
-            'status' => true,
-            'data' => $registros
-        ]);
-    } catch (\Exception $e) {
-        \Log::error("Error en obtenerRegistrosVales: " . $e->getMessage());
-        return response()->json([
-            'status' => false,
-            'message' => 'Error al consultar registros: ' . $e->getMessage()
-        ], 500);
     }
-}
 
     public function actualizarEstatusVale(Request $request)
     {
@@ -100,7 +101,7 @@ public function obtenerRegistrosVales(Request $request)
 
             $spreadsheet = IOFactory::load($file->getRealPath());
             $sheet = $spreadsheet->getActiveSheet();
-            $rows = $sheet->toArray(null, true, true, true); 
+            $rows = $sheet->toArray(null, true, true, true);
 
             if (count($rows) <= 1) {
                 return response()->json([
@@ -142,7 +143,7 @@ public function obtenerRegistrosVales(Request $request)
 
                 if (!empty($cuenta) && !empty($folio)) {
                     \App\Models\Card::updateOrCreate(
-                        ['cuenta' => $cuenta], 
+                        ['cuenta' => $cuenta],
                         ['folio' => $folio]
                     );
 
@@ -172,146 +173,548 @@ public function obtenerRegistrosVales(Request $request)
             ], 500);
         }
     }
-public function cargarTarjetas(Request $request)
-{
-    $request->validate([
-        'archivo' => 'required|file|mimes:csv,txt,xlsx,xls|max:5120',
-    ]);
+    public function cargarTarjetas(Request $request)
+    {
+        $request->validate([
+            'archivo' => 'required|file|mimes:csv,txt,xlsx,xls|max:5120',
+        ]);
 
-    $file = $request->file('archivo');
-    $extension = strtolower($file->getClientOriginalExtension());
-    $filas = [];
+        $file = $request->file('archivo');
+        $extension = strtolower($file->getClientOriginalExtension());
+        $filas = [];
 
-    try {
-        if (in_array($extension, ['csv', 'txt'], true)) {
-            $path = $file->getRealPath();
-            $contenido = file_get_contents($path);
-            $delimitador = substr_count($contenido, ';') > substr_count($contenido, ',')
-                ? ';'
-                : ',';
+        try {
+            if (in_array($extension, ['csv', 'txt'], true)) {
+                $path = $file->getRealPath();
+                $contenido = file_get_contents($path);
+                $delimitador = substr_count($contenido, ';') > substr_count($contenido, ',')
+                    ? ';'
+                    : ',';
 
-            $handle = fopen($path, 'r');
+                $handle = fopen($path, 'r');
 
-            if ($handle === false) {
-                throw new \RuntimeException('No se pudo leer el archivo.');
-            }
-
-            $numeroFila = 0;
-
-            while (($data = fgetcsv($handle, 0, $delimitador)) !== false) {
-                if ($numeroFila++ === 0) {
-                    continue; // Omitir encabezados
+                if ($handle === false) {
+                    throw new \RuntimeException('No se pudo leer el archivo.');
                 }
 
-                $filas[] = [
-                    'cuenta' => isset($data[1]) ? trim((string) $data[1]) : null,
-                    'rfc' => isset($data[3]) ? strtoupper(trim((string) $data[3])) : null,
-                    'curp' => isset($data[4]) ? strtoupper(trim((string) $data[4])) : null,
-                ];
+                $numeroFila = 0;
+
+                while (($data = fgetcsv($handle, 0, $delimitador)) !== false) {
+                    if ($numeroFila++ === 0) {
+                        continue;
+                    }
+
+                    $filas[] = [
+                        'cuenta' => isset($data[1]) ? trim((string) $data[1]) : null,
+                        'rfc' => isset($data[3]) ? strtoupper(trim((string) $data[3])) : null,
+                        'curp' => isset($data[4]) ? strtoupper(trim((string) $data[4])) : null,
+                    ];
+                }
+
+                fclose($handle);
+            } else {
+                $spreadsheet = IOFactory::load($file->getRealPath());
+                $hoja = $spreadsheet->getActiveSheet();
+
+                foreach ($hoja->toArray(null, true, true, false) as $indice => $row) {
+                    if ($indice === 0) {
+                        continue; 
+                    }
+
+                    $filas[] = [
+                        'cuenta' => isset($row[1]) ? trim((string) $row[1]) : null,
+                        'rfc' => isset($row[3]) ? strtoupper(trim((string) $row[3])) : null,
+                        'curp' => isset($row[4]) ? strtoupper(trim((string) $row[4])) : null,
+                    ];
+                }
             }
 
-            fclose($handle);
+            $actualizados = 0;
+            $noEncontrados = 0;
+
+            DB::connection('oracle_primary')->transaction(function () use (
+                $filas,
+                &$actualizados,
+                &$noEncontrados
+            ) {
+                foreach ($filas as $fila) {
+                    $cuenta = $fila['cuenta'];
+                    $rfc = $fila['rfc'];
+                    $curp = $fila['curp'];
+
+                    if (!$cuenta || (!$rfc && !$curp)) {
+                        continue;
+                    }
+
+                    $consulta = DB::connection('oracle_primary')
+                        ->table('registers')
+                        ->where(function ($query) use ($rfc, $curp) {
+                            if ($rfc) {
+                                $query->orWhereRaw('UPPER(RFC) = ?', [$rfc]);
+                            }
+
+                            if ($curp) {
+                                $query->orWhereRaw('UPPER(CURP) = ?', [$curp]);
+                            }
+                        });
+
+                    $afectados = $consulta->update([
+                        'CUENTAINICIAL' => $cuenta,
+                    ]);
+
+                    if ($afectados > 0) {
+                        $actualizados++;
+                    } else {
+                        $noEncontrados++;
+                    }
+                }
+            });
+
+            return response()->json([
+                'status' => true,
+                'message' => "Carga exitosa. Cuentas actualizadas: {$actualizados}. No encontrados en BD: {$noEncontrados}.",
+                'actualizados' => $actualizados,
+                'noEncontrados' => $noEncontrados,
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Error al actualizar tarjetas en Oracle: ' . $e->getMessage());
+
+            return response()->json([
+                'status' => false,
+                'message' => 'Error al procesar el archivo: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function descargarFormatos($idRegister)
+    {
+        if (!$idRegister || $idRegister === 'undefined') {
+            return response()->json([
+                'status' => false,
+                'message' => 'El ID del registro es inválido.',
+            ], 400);
+        }
+
+        $empleado = Register::find($idRegister);
+
+        if (!$empleado) {
+            return response()->json([
+                'status' => false,
+                'message' => 'No se encontró el registro en la base de datos.',
+            ], 404);
+        }
+
+        $pdf = Pdf::loadView('pdf.formatos_vales', compact('empleado'));
+        $pdf->setPaper('letter', 'portrait');
+
+        $numeroEmpleado =
+            $empleado->NUMEMPLEADO
+            ?? $empleado->numempleado
+            ?? $empleado->numEmpleado
+            ?? $idRegister;
+
+        return $pdf->stream("formatos_vales_{$numeroEmpleado}.pdf");
+    }
+    public function users()
+    {
+        $typeUsers = DB::connection('oracle_primary')
+            ->table('typeUser')
+            ->get();
+
+        return view('admin.users', compact('typeUsers'));
+    }
+
+    public function datosEmpleado(Request $request)
+    {
+        $request->validate([
+            'empleado' => ['required', 'string'],
+            'origen' => ['required', 'in:secretaría,guardia'],
+        ]);
+
+        $numeroEmpleado = explode('-', $request->input('empleado'))[0];
+        $usuarioActual = Auth::user();
+
+        if ($request->input('origen') === 'guardia') {
+            $conexion = 'gnnomina';
+            $tabla = 'EMPLEADOS_VIATICOS_GN';
+            $fuente = 'Guardia Nacional';
         } else {
-            $spreadsheet = IOFactory::load($file->getRealPath());
-            $hoja = $spreadsheet->getActiveSheet();
+            $conexion = 'oracle_secondary';
+            $tabla = 'EMPLEADOS_VIATICOS';
+            $fuente = 'la Secretaría';
+        }
 
-            foreach ($hoja->toArray(null, true, true, false) as $indice => $row) {
-                if ($indice === 0) {
-                    continue; // Omitir encabezados
-                }
+        try {
+            $empleado = $this->buscarEnConexion(
+                $conexion,
+                $tabla,
+                $numeroEmpleado,
+                $usuarioActual
+            );
 
-                $filas[] = [
-                    'cuenta' => isset($row[1]) ? trim((string) $row[1]) : null,
-                    'rfc' => isset($row[3]) ? strtoupper(trim((string) $row[3])) : null,
-                    'curp' => isset($row[4]) ? strtoupper(trim((string) $row[4])) : null,
-                ];
+            if (!$empleado) {
+                return response()->json([
+                    'error' => "Empleado no encontrado en {$fuente} o fuera de su unidad.",
+                ], 404);
+            }
+
+            return response()->json([
+                'num_empleado' => $empleado->num_empleado,
+                'nombre' => $empleado->nombre,
+                'apellido_paterno' => $empleado->apellido_paterno,
+                'apellido_materno' => $empleado->apellido_materno,
+                'nivel' => $empleado->nivel,
+                'unidad' => $empleado->unidad,
+            ]);
+        } catch (\Throwable $e) {
+            Log::error("Error consultando empleados en {$conexion}: " . $e->getMessage());
+
+            return response()->json([
+                'error' => "No se pudo consultar la información de {$fuente}.",
+            ], 503);
+        }
+    }
+
+    private function buscarEnConexion(
+        string $conexion,
+        string $tabla,
+        string $numeroEmpleado,
+        $usuarioActual
+    ) {
+        $consulta = DB::connection($conexion)
+            ->table($tabla)
+            ->where('NUM_EMPLEADO', $numeroEmpleado);
+
+        $tipoUsuario = $usuarioActual->idType
+            ?? $usuarioActual->idtype
+            ?? $usuarioActual->IDTYPE
+            ?? null;
+
+        if (in_array((int) $tipoUsuario, [2, 3], true)) {
+            $unidad = $usuarioActual->unidad ?? $usuarioActual->UNIDAD ?? null;
+
+            if ($unidad) {
+                $consulta->where('UNIDAD', $unidad);
+            } else {
+                return null;
             }
         }
 
-        $actualizados = 0;
-        $noEncontrados = 0;
+        return $consulta->first();
+    }
 
-        DB::connection('oracle_primary')->transaction(function () use (
-            $filas,
-            &$actualizados,
-            &$noEncontrados
-        ) {
-            foreach ($filas as $fila) {
-                $cuenta = $fila['cuenta'];
-                $rfc = $fila['rfc'];
-                $curp = $fila['curp'];
+    public function saveUser(Request $request)
+    {
+        $request->validate([
+            'numEmpleado' => ['required', 'string', 'max:20'],
+            'origen' => ['required', 'in:secretaría,guardia'],
+            'nomUsuario' => ['required', 'string', 'max:255'],
+            'appUsuario' => ['required', 'string', 'max:255'],
+            'apmUsuario' => ['nullable', 'string', 'max:255'],
+            'cargo' => ['required', 'string', 'max:255'],
+            'unidad' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'email', 'max:255'],
+            'password' => ['required', 'string', 'min:8'],
+            'idtype' => [Auth::user()->idType == 1 ? 'required' : 'nullable', 'integer'],
+        ]);
 
-                if (!$cuenta || (!$rfc && !$curp)) {
-                    continue;
-                }
+        $origen = $request->input('origen');
+        $numero = strtoupper(trim($request->input('numEmpleado')));
+        $email = strtolower(trim($request->input('email')));
 
-                $consulta = DB::connection('oracle_primary')
-                    ->table('registers')
-                    ->where(function ($query) use ($rfc, $curp) {
-                        if ($rfc) {
-                            $query->orWhereRaw('UPPER(RFC) = ?', [$rfc]);
-                        }
+        $emailExiste = DB::connection('oracle_primary')
+            ->table('users')
+            ->whereRaw('UPPER(EMAIL) = ?', [strtoupper($email)])
+            ->exists();
 
-                        if ($curp) {
-                            $query->orWhereRaw('UPPER(CURP) = ?', [$curp]);
-                        }
-                    });
+        if ($emailExiste) {
+            return back()
+                ->withErrors(['email' => 'Ese correo ya está registrado.'])
+                ->withInput();
+        }
 
-                $afectados = $consulta->update([
-                    'CUENTAINICIAL' => $cuenta,
-                ]);
+        $numeroExiste = DB::connection('oracle_primary')
+            ->table('users')
+            ->whereRaw('UPPER(NUMEMPLEADO) = ?', [$numero])
+            ->whereRaw('UPPER(ORIGEN) = ?', [strtoupper($origen)])
+            ->exists();
 
-                if ($afectados > 0) {
-                    $actualizados++;
+        if ($numeroExiste) {
+            return back()
+                ->withErrors([
+                    'numEmpleado' => 'Ese número de empleado ya está registrado para ese origen.',
+                ])
+                ->withInput();
+        }
+
+        $tipoUsuarioActual = Auth::user()->idType
+            ?? Auth::user()->idtype
+            ?? Auth::user()->IDTYPE
+            ?? null;
+
+        $idType = (int) $tipoUsuarioActual === 1
+            ? $request->integer('idtype')
+            : 3;
+
+        User::create([
+            'numEmpleado' => $request->input('numEmpleado'),
+            'firstName' => trim($request->input('nomUsuario')),
+            'lastName' => trim($request->input('appUsuario')),
+            'middleName' => trim($request->input('apmUsuario', '')),
+            'nivel' => trim($request->input('cargo')),
+            'unidad' => trim($request->input('unidad')),
+            'email' => $email,
+            'password' => Hash::make($request->input('password')),
+            'origen' => $origen,
+            'idType' => $idType,
+            'active' => 0,
+        ]);
+
+        return back()->with('success', 'El usuario se creó correctamente.');
+    }
+
+    public function users_list_json()
+    {
+        $query = DB::connection('oracle_primary')
+            ->table('users')
+            ->join('typeUser', 'typeUser.idType', '=', 'users.idType')
+            ->selectRaw(
+                'users.ID_USER AS "id_user",
+             users.NUMEMPLEADO AS "numempleado",
+             users.FIRSTNAME || \' \' || users.LASTNAME || \' \' || users.MIDDLENAME AS "name_complete",
+             users.ORIGEN AS "origen",
+             typeUser.TYPEUSER AS "typeuser",
+             users.UNIDAD AS "unidad",
+             users.EMAIL AS "email",
+             users.ACTIVE AS "active"'
+            )
+            ->orderBy('users.ID_USER');
+
+        if (Auth::check()) {
+            $usuarioActual = Auth::user();
+            $tipoUsuario = (int) (
+                $usuarioActual->idType
+                ?? $usuarioActual->idtype
+                ?? $usuarioActual->IDTYPE
+                ?? 0
+            );
+
+            if ($tipoUsuario === 3) {
+                $idUsuario = $usuarioActual->id_user
+                    ?? $usuarioActual->ID_USER
+                    ?? null;
+
+                $query->where('users.id_user', $idUsuario);
+            } elseif ($tipoUsuario === 2) {
+                $unidad = $usuarioActual->unidad
+                    ?? $usuarioActual->UNIDAD
+                    ?? null;
+
+                if ($unidad) {
+                    $query->where('users.unidad', $unidad);
                 } else {
-                    $noEncontrados++;
+                    $query->whereRaw('1 = 0');
                 }
             }
-        });
+        }
+
+        return DataTables::of($query)
+            ->filterColumn('name_complete', function ($query, $keyword) {
+                $query->whereRaw(
+                    "UPPER(users.FIRSTNAME || ' ' || users.LASTNAME || ' ' || users.MIDDLENAME) LIKE ?",
+                    ['%' . strtoupper($keyword) . '%']
+                );
+            })
+            ->editColumn('active', function ($usuario) {
+                return (int) $usuario->active === 1
+                    ? '<span class="badge bg-success">Activo</span>'
+                    : '<span class="badge bg-danger">Inactivo</span>';
+            })
+            ->addColumn('btn_edit', 'buttons.button_user')
+            ->rawColumns(['btn_edit', 'active'])
+            ->toJson();
+    }
+
+    public function editUser($idUser)
+    {
+        $usuario = User::findOrFail($idUser);
+
+        $typeUsers = DB::connection('oracle_primary')
+            ->table('typeUser')
+            ->get();
+
+        return view('admin.editUsuario', compact('usuario', 'typeUsers'));
+    }
+
+    public function updateUser(Request $request)
+    {
+        $request->validate([
+            'id_user' => ['required', 'integer'],
+            'numEmpleado' => ['required', 'string', 'max:20'],
+            'origen' => ['required', 'in:secretaría,guardia'],
+            'nomUsuario' => ['required', 'string', 'max:255'],
+            'appUsuario' => ['required', 'string', 'max:255'],
+            'apmUsuario' => ['nullable', 'string', 'max:255'],
+            'cargo' => ['required', 'string', 'max:255'],
+            'unidad' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'email', 'max:255'],
+            'active' => ['nullable', 'boolean'],
+            'idtype' => ['nullable', 'integer'],
+            'nuevaPassword' => ['nullable', 'string', 'min:8'],
+        ]);
+
+        $usuario = User::findOrFail($request->input('id_user'));
+        $idUsuario = $usuario->id_user ?? $usuario->ID_USER;
+
+        $email = strtolower(trim($request->input('email')));
+        $origen = $request->input('origen');
+        $numero = strtoupper(trim($request->input('numEmpleado')));
+
+        $emailExiste = DB::connection('oracle_primary')
+            ->table('users')
+            ->whereRaw('UPPER(EMAIL) = ?', [strtoupper($email)])
+            ->where('ID_USER', '<>', $idUsuario)
+            ->exists();
+
+        $numeroExiste = DB::connection('oracle_primary')
+            ->table('users')
+            ->whereRaw('UPPER(NUMEMPLEADO) = ?', [$numero])
+            ->whereRaw('UPPER(ORIGEN) = ?', [strtoupper($origen)])
+            ->where('ID_USER', '<>', $idUsuario)
+            ->exists();
+
+        $errores = [];
+if ($request->filled('nuevaPassword')) {
+    $data['password'] = Hash::make($request->input('nuevaPassword'));
+}
+        if ($emailExiste) {
+            $errores['email'] = 'Ese correo ya está registrado por otro usuario.';
+        }
+
+        if ($numeroExiste) {
+            $errores['numEmpleado'] =
+                'Ese número de empleado ya está registrado para ese origen.';
+        }
+
+        if ($errores) {
+            return back()->withErrors($errores)->withInput();
+        }
+
+        $tipoUsuarioActual = Auth::user()->idType
+            ?? Auth::user()->idtype
+            ?? Auth::user()->IDTYPE
+            ?? null;
+
+        $datos = [
+            'numEmpleado' => $request->input('numEmpleado'),
+            'firstName' => trim($request->input('nomUsuario')),
+            'lastName' => trim($request->input('appUsuario')),
+            'middleName' => trim($request->input('apmUsuario', '')),
+            'nivel' => trim($request->input('cargo')),
+            'unidad' => trim($request->input('unidad')),
+            'email' => $email,
+            'origen' => $origen,
+            'active' => $request->has('active')
+                ? $request->boolean('active')
+                : (bool) ($usuario->active ?? $usuario->ACTIVE),
+        ];
+
+        if ((int) $tipoUsuarioActual === 1 && $request->filled('idtype')) {
+            $datos['idType'] = $request->integer('idtype');
+        }
+
+        $usuario->update($datos);
+
+        return back()->with('success', 'Usuario actualizado correctamente.');
+    }
+    public function buscarEmpleadoParaUsuario(Request $request)
+{
+    $datos = $request->validate([
+        'numEmpleado' => ['required', 'string', 'max:20'],
+        'origen' => ['required', 'in:secretaría,guardia'],
+    ]);
+
+    $numeroEmpleado = trim(explode('-', $datos['numEmpleado'])[0]);
+    $esGuardia = $datos['origen'] === 'guardia';
+
+    $conexion = $esGuardia ? 'gnnomina' : 'oracle_secondary';
+    $tabla = $esGuardia ? 'EMPLEADOS_PRESTACIONESGN' : 'EMPLEADOS_PRESTACIONES';
+
+    try {
+        $empleado = DB::connection($conexion)
+            ->table($tabla)
+            ->where('NUM_EMPLEADO', $numeroEmpleado)
+            ->first();
+
+        if (!$empleado) {
+            return response()->json([
+                'status' => false,
+                'message' => 'No se encontró el empleado en el origen seleccionado.',
+            ], 404);
+        }
 
         return response()->json([
             'status' => true,
-            'message' => "Carga exitosa. Cuentas actualizadas: {$actualizados}. No encontrados en BD: {$noEncontrados}.",
-            'actualizados' => $actualizados,
-            'noEncontrados' => $noEncontrados,
+            'data' => [
+                'numEmpleado' => $empleado->num_empleado ?? $empleado->NUM_EMPLEADO ?? $numeroEmpleado,
+                'firstName' => $empleado->nombre ?? $empleado->NOMBRE ?? '',
+                'lastName' => $empleado->apellido_paterno ?? $empleado->APELLIDO_PATERNO ?? '',
+                'middleName' => $empleado->apellido_materno ?? $empleado->APELLIDO_MATERNO ?? '',
+                'nivel' => $empleado->nivel ?? $empleado->NIVEL ?? '',
+                'unidad' => $empleado->unidad ?? $empleado->UNIDAD ?? '',
+            ],
+        ]);
+} catch (\Throwable $e) {
+    Log::error('Error al buscar empleado para alta de usuario', [
+        'conexion' => $conexion,
+        'tabla' => $tabla,
+        'origen' => $datos['origen'],
+        'numeroEmpleado' => $numeroEmpleado,
+        'error' => $e->getMessage(),
+    ]);
+
+    return response()->json([
+        'status' => false,
+        'message' => 'No fue posible consultar el origen seleccionado.',
+    ], 503);
+}
+}
+public function listarUsuarios()
+{
+    try {
+        $usuarios = DB::connection('oracle_primary')
+            ->table('users as u')
+            ->leftJoin('typeUser as t', 't.idType', '=', 'u.idType')
+            ->select([
+                'u.id_user',
+                'u.numEmpleado',
+                'u.firstName',
+                'u.lastName',
+                'u.middleName',
+                'u.nivel',
+                'u.unidad',
+                'u.email',
+                'u.active',
+                'u.idType',
+                'u.origen',
+                't.typeuser as typeuser',
+            ])
+            ->orderBy('u.id_user', 'desc')
+            ->get();
+
+        return response()->json([
+            'status' => true,
+            'data' => $usuarios,
         ]);
     } catch (\Throwable $e) {
-        Log::error('Error al actualizar tarjetas en Oracle: ' . $e->getMessage());
+        Log::error('Error al listar usuarios', [
+            'error' => $e->getMessage(),
+        ]);
 
         return response()->json([
             'status' => false,
-            'message' => 'Error al procesar el archivo: ' . $e->getMessage(),
+            'message' => 'Error al consultar usuarios.',
         ], 500);
     }
-}
-
-public function descargarFormatos($idRegister)
-{
-    if (!$idRegister || $idRegister === 'undefined') {
-        return response()->json([
-            'status' => false,
-            'message' => 'El ID del registro es inválido.',
-        ], 400);
-    }
-
-    $empleado = Register::find($idRegister);
-
-    if (!$empleado) {
-        return response()->json([
-            'status' => false,
-            'message' => 'No se encontró el registro en la base de datos.',
-        ], 404);
-    }
-
-    $pdf = Pdf::loadView('pdf.formatos_vales', compact('empleado'));
-    $pdf->setPaper('letter', 'portrait');
-
-    $numeroEmpleado =
-        $empleado->NUMEMPLEADO
-        ?? $empleado->numempleado
-        ?? $empleado->numEmpleado
-        ?? $idRegister;
-
-    return $pdf->stream("formatos_vales_{$numeroEmpleado}.pdf");
 }
 }
