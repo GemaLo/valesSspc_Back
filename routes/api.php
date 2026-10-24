@@ -31,4 +31,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/admin/users/empleado', [AdminController::class, 'buscarEmpleadoParaUsuario']);
     Route::post('/admin/users', [AdminController::class, 'crearUsuario']);
     Route::put('/admin/users/{id_user}', [AdminController::class, 'actualizarUsuario']);
+
+    Route::get('/admin/reportes/anios', [AdminController::class, 'obtenerAniosReporte']);
+    Route::get('/admin/reportes/registros', [AdminController::class, 'obtenerReporteRegistros']);
 });

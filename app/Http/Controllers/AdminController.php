@@ -218,7 +218,7 @@ class AdminController extends Controller
 
                 foreach ($hoja->toArray(null, true, true, false) as $indice => $row) {
                     if ($indice === 0) {
-                        continue; 
+                        continue;
                     }
 
                     $filas[] = [
@@ -584,9 +584,9 @@ class AdminController extends Controller
             ->exists();
 
         $errores = [];
-if ($request->filled('nuevaPassword')) {
-    $data['password'] = Hash::make($request->input('nuevaPassword'));
-}
+        if ($request->filled('nuevaPassword')) {
+            $data['password'] = Hash::make($request->input('nuevaPassword'));
+        }
         if ($emailExiste) {
             $errores['email'] = 'Ese correo ya está registrado por otro usuario.';
         }
@@ -628,93 +628,225 @@ if ($request->filled('nuevaPassword')) {
         return back()->with('success', 'Usuario actualizado correctamente.');
     }
     public function buscarEmpleadoParaUsuario(Request $request)
-{
-    $datos = $request->validate([
-        'numEmpleado' => ['required', 'string', 'max:20'],
-        'origen' => ['required', 'in:secretaría,guardia'],
-    ]);
+    {
+        $datos = $request->validate([
+            'numEmpleado' => ['required', 'string', 'max:20'],
+            'origen' => ['required', 'in:secretaría,guardia'],
+        ]);
 
-    $numeroEmpleado = trim(explode('-', $datos['numEmpleado'])[0]);
-    $esGuardia = $datos['origen'] === 'guardia';
+        $numeroEmpleado = trim(explode('-', $datos['numEmpleado'])[0]);
+        $esGuardia = $datos['origen'] === 'guardia';
 
-    $conexion = $esGuardia ? 'gnnomina' : 'oracle_secondary';
-    $tabla = $esGuardia ? 'EMPLEADOS_PRESTACIONESGN' : 'EMPLEADOS_PRESTACIONES';
+        $conexion = $esGuardia ? 'gnnomina' : 'oracle_secondary';
+        $tabla = $esGuardia ? 'EMPLEADOS_PRESTACIONESGN' : 'EMPLEADOS_PRESTACIONES';
 
-    try {
-        $empleado = DB::connection($conexion)
-            ->table($tabla)
-            ->where('NUM_EMPLEADO', $numeroEmpleado)
-            ->first();
+        try {
+            $empleado = DB::connection($conexion)
+                ->table($tabla)
+                ->where('NUM_EMPLEADO', $numeroEmpleado)
+                ->first();
 
-        if (!$empleado) {
+            if (!$empleado) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'No se encontró el empleado en el origen seleccionado.',
+                ], 404);
+            }
+
+            return response()->json([
+                'status' => true,
+                'data' => [
+                    'numEmpleado' => $empleado->num_empleado ?? $empleado->NUM_EMPLEADO ?? $numeroEmpleado,
+                    'firstName' => $empleado->nombre ?? $empleado->NOMBRE ?? '',
+                    'lastName' => $empleado->apellido_paterno ?? $empleado->APELLIDO_PATERNO ?? '',
+                    'middleName' => $empleado->apellido_materno ?? $empleado->APELLIDO_MATERNO ?? '',
+                    'nivel' => $empleado->nivel ?? $empleado->NIVEL ?? '',
+                    'unidad' => $empleado->unidad ?? $empleado->UNIDAD ?? '',
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Error al buscar empleado para alta de usuario', [
+                'conexion' => $conexion,
+                'tabla' => $tabla,
+                'origen' => $datos['origen'],
+                'numeroEmpleado' => $numeroEmpleado,
+                'error' => $e->getMessage(),
+            ]);
+
             return response()->json([
                 'status' => false,
-                'message' => 'No se encontró el empleado en el origen seleccionado.',
-            ], 404);
+                'message' => 'No fue posible consultar el origen seleccionado.',
+            ], 503);
         }
+    }
+    public function listarUsuarios()
+    {
+        try {
+            $usuarios = DB::connection('oracle_primary')
+                ->table('users as u')
+                ->leftJoin('typeUser as t', 't.idType', '=', 'u.idType')
+                ->select([
+                    'u.id_user',
+                    'u.numEmpleado',
+                    'u.firstName',
+                    'u.lastName',
+                    'u.middleName',
+                    'u.nivel',
+                    'u.unidad',
+                    'u.email',
+                    'u.active',
+                    'u.idType',
+                    'u.origen',
+                    't.typeuser as typeuser',
+                ])
+                ->orderBy('u.id_user', 'desc')
+                ->get();
 
-        return response()->json([
-            'status' => true,
-            'data' => [
-                'numEmpleado' => $empleado->num_empleado ?? $empleado->NUM_EMPLEADO ?? $numeroEmpleado,
-                'firstName' => $empleado->nombre ?? $empleado->NOMBRE ?? '',
-                'lastName' => $empleado->apellido_paterno ?? $empleado->APELLIDO_PATERNO ?? '',
-                'middleName' => $empleado->apellido_materno ?? $empleado->APELLIDO_MATERNO ?? '',
-                'nivel' => $empleado->nivel ?? $empleado->NIVEL ?? '',
-                'unidad' => $empleado->unidad ?? $empleado->UNIDAD ?? '',
-            ],
+            return response()->json([
+                'status' => true,
+                'data' => $usuarios,
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Error al listar usuarios', [
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'status' => false,
+                'message' => 'Error al consultar usuarios.',
+            ], 500);
+        }
+    }
+
+    public function obtenerAniosReporte()
+    {
+        try {
+            $origen = $this->origenReporteDelUsuario();
+
+            $anios = DB::connection('oracle_primary')
+                ->table('registers')
+                ->whereRaw('UPPER(ORIGEN) = ?', [$origen])
+                ->whereNotNull('CREATED_AT')
+                ->selectRaw('EXTRACT(YEAR FROM CREATED_AT) AS ANIO')
+                ->distinct()
+                ->orderByRaw('EXTRACT(YEAR FROM CREATED_AT) DESC')
+                ->get()
+                ->map(function ($fila) {
+                    $valores = array_values((array) $fila);
+
+                    return (int) ($valores[0] ?? 0);
+                })
+                ->filter(fn($anio) => $anio > 0)
+                ->values();
+
+            return response()->json([
+                'status' => true,
+                'origen' => $origen,
+                'data' => $anios,
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Error al consultar años disponibles para reportes', [
+                'user_id' => Auth::id(),
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'status' => false,
+                'message' => 'No fue posible consultar los años del reporte.',
+            ], 500);
+        }
+    }
+
+    public function obtenerReporteRegistros(Request $request)
+    {
+        $datos = $request->validate([
+            'anio' => ['required', 'integer', 'min:2000', 'max:2100'],
         ]);
-} catch (\Throwable $e) {
-    Log::error('Error al buscar empleado para alta de usuario', [
-        'conexion' => $conexion,
-        'tabla' => $tabla,
-        'origen' => $datos['origen'],
-        'numeroEmpleado' => $numeroEmpleado,
-        'error' => $e->getMessage(),
-    ]);
 
-    return response()->json([
-        'status' => false,
-        'message' => 'No fue posible consultar el origen seleccionado.',
-    ], 503);
-}
-}
-public function listarUsuarios()
-{
-    try {
-        $usuarios = DB::connection('oracle_primary')
-            ->table('users as u')
-            ->leftJoin('typeUser as t', 't.idType', '=', 'u.idType')
-            ->select([
-                'u.id_user',
-                'u.numEmpleado',
-                'u.firstName',
-                'u.lastName',
-                'u.middleName',
-                'u.nivel',
-                'u.unidad',
-                'u.email',
-                'u.active',
-                'u.idType',
-                'u.origen',
-                't.typeuser as typeuser',
-            ])
-            ->orderBy('u.id_user', 'desc')
-            ->get();
+        try {
+            $origen = $this->origenReporteDelUsuario();
+            $columnas = $this->columnasReportePorOrigen($origen);
+            $keys = array_column($columnas, 'key');
 
-        return response()->json([
-            'status' => true,
-            'data' => $usuarios,
-        ]);
-    } catch (\Throwable $e) {
-        Log::error('Error al listar usuarios', [
-            'error' => $e->getMessage(),
-        ]);
+            $registros = DB::connection('oracle_primary')
+                ->table('registers')
+                ->select($keys)
+                ->whereRaw('UPPER(ORIGEN) = ?', [$origen])
+                ->whereRaw('EXTRACT(YEAR FROM CREATED_AT) = ?', [(int) $datos['anio']])
+                ->orderBy('IDREGISTER', 'desc')
+                ->get();
 
-        return response()->json([
-            'status' => false,
-            'message' => 'Error al consultar usuarios.',
-        ], 500);
+            return response()->json([
+                'status' => true,
+                'anio' => (int) $datos['anio'],
+                'origen' => $origen,
+                'columnas' => $columnas,
+                'data' => $registros,
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Error al consultar reporte de registros', [
+                'user_id' => Auth::id(),
+                'anio' => $datos['anio'],
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'status' => false,
+                'message' => 'No fue posible consultar los registros del reporte.',
+            ], 500);
+        }
+    }
+
+    private function origenReporteDelUsuario(): string
+    {
+        $usuario = Auth::user();
+        $origenUsuario = strtolower(trim((string) (
+            $usuario->origen
+            ?? $usuario->ORIGEN
+            ?? ''
+        )));
+
+        return in_array($origenUsuario, [
+            'sspc',
+            'sc',
+            'sector central',
+            'secretaria',
+            'secretaría',
+        ], true) ? 'SC' : 'GN';
+    }
+
+    private function columnasReportePorOrigen(string $origen): array
+    {
+        $comunes = [
+            ['key' => 'IDREGISTER', 'label' => 'ID de registro'],
+            ['key' => 'NUMEMPLEADO', 'label' => 'Número de empleado'],
+            ['key' => 'NOMBRECOMPLETO', 'label' => 'Nombre completo'],
+            ['key' => 'NOMEMPLEADO', 'label' => 'Nombre(s)'],
+            ['key' => 'APPEMPLEADO', 'label' => 'Apellido paterno'],
+            ['key' => 'APMEMPLEADO', 'label' => 'Apellido materno'],
+            ['key' => 'UR', 'label' => 'UR'],
+            ['key' => 'RFC', 'label' => 'RFC'],
+            ['key' => 'CURP', 'label' => 'CURP'],
+            ['key' => 'NSS', 'label' => 'NSS'],
+            ['key' => 'NIVEL', 'label' => 'Nivel'],
+            ['key' => 'IDENLACE', 'label' => 'Enlace'],
+            ['key' => 'CUENTAINICIAL', 'label' => 'Cuenta asignada'],
+            ['key' => 'IDSTATUS', 'label' => 'Estatus'],
+            ['key' => 'ORIGEN', 'label' => 'Origen del registro'],
+            ['key' => 'CREATED_AT', 'label' => 'Fecha de registro'],
+            ['key' => 'UPDATED_AT', 'label' => 'Última actualización'],
+        ];
+
+        $especificas = $origen === 'SC'
+            ? [['key' => 'PENSION', 'label' => 'Pensión alimenticia']]
+            : [
+                ['key' => 'PUESTO', 'label' => 'Puesto'],
+                ['key' => 'UBICACION', 'label' => 'Ubicación física'],
+                ['key' => 'CLAVE', 'label' => 'Clave'],
+                ['key' => 'MODALIDAD', 'label' => 'Modalidad'],
+            ];
+
+        return array_merge($comunes, $especificas);
     }
 }
-}
+    
