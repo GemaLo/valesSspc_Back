@@ -22,6 +22,7 @@ class UserSeeder extends Seeder
             'idType' => '1',
             'origen' => 'SSPC',
             'email' => 'gema.loperena@sspc.gob.mx',
+            'must_change_password' => '1',
             'password' => Hash::make('password')
         ]);
         DB::table('users')->insert([
@@ -35,6 +36,7 @@ class UserSeeder extends Seeder
             'idType' => '2',
             'origen' => 'SSPC',
             'email' => 'ana.rodriguezf@sspc.gob.mx',
+            'must_change_password' => '1',
             'password' => Hash::make('password')
         ]);
         DB::table('users')->insert([
@@ -47,7 +49,8 @@ class UserSeeder extends Seeder
             'active' => '1',
             'idType' => '3',
             'origen' => 'SSPC',
-            'email' => 'hector.serralde@sspc.gob.mx',
+            'email' => 'hector.serralde@sspc.gob.mx', 
+            'must_change_password' => '1',
             'password' => Hash::make('password')
         ]);
     }

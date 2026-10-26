@@ -546,87 +546,105 @@ class AdminController extends Controller
         return view('admin.editUsuario', compact('usuario', 'typeUsers'));
     }
 
-    public function updateUser(Request $request)
-    {
-        $request->validate([
-            'id_user' => ['required', 'integer'],
-            'numEmpleado' => ['required', 'string', 'max:20'],
-            'origen' => ['required', 'in:secretaría,guardia'],
-            'nomUsuario' => ['required', 'string', 'max:255'],
-            'appUsuario' => ['required', 'string', 'max:255'],
-            'apmUsuario' => ['nullable', 'string', 'max:255'],
-            'cargo' => ['required', 'string', 'max:255'],
-            'unidad' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email', 'max:255'],
-            'active' => ['nullable', 'boolean'],
-            'idtype' => ['nullable', 'integer'],
-            'nuevaPassword' => ['nullable', 'string', 'min:8'],
-        ]);
+    public function actualizarUsuario(Request $request, $id_user)
+{
+    $request->validate([
+        'numEmpleado' => ['required', 'string', 'max:20'],
+        'origen'      => ['required', 'in:secretaría,guardia'],
+        'firstName'   => ['required', 'string', 'max:255'],
+        'lastName'    => ['required', 'string', 'max:255'],
+        'middleName'  => ['nullable', 'string', 'max:255'],
+        'nivel'       => ['required', 'string', 'max:255'],
+        'unidad'      => ['required', 'string', 'max:255'],
+        'email'       => ['required', 'email', 'max:255'],
+        'active'      => ['required', 'boolean'],
+        'idType'      => ['nullable', 'integer'],
+        'nuevaPassword' => ['nullable', 'string', 'min:8'],
+    ]);
 
-        $usuario = User::findOrFail($request->input('id_user'));
-        $idUsuario = $usuario->id_user ?? $usuario->ID_USER;
+    $idUsuario = (int) $id_user;
+    $db = DB::connection('oracle_primary');
 
-        $email = strtolower(trim($request->input('email')));
-        $origen = $request->input('origen');
-        $numero = strtoupper(trim($request->input('numEmpleado')));
+    $usuarioExiste = $db->table('users')
+        ->where('ID_USER', $idUsuario)
+        ->exists();
 
-        $emailExiste = DB::connection('oracle_primary')
-            ->table('users')
-            ->whereRaw('UPPER(EMAIL) = ?', [strtoupper($email)])
-            ->where('ID_USER', '<>', $idUsuario)
-            ->exists();
-
-        $numeroExiste = DB::connection('oracle_primary')
-            ->table('users')
-            ->whereRaw('UPPER(NUMEMPLEADO) = ?', [$numero])
-            ->whereRaw('UPPER(ORIGEN) = ?', [strtoupper($origen)])
-            ->where('ID_USER', '<>', $idUsuario)
-            ->exists();
-
-        $errores = [];
-        if ($request->filled('nuevaPassword')) {
-            $data['password'] = Hash::make($request->input('nuevaPassword'));
-        }
-        if ($emailExiste) {
-            $errores['email'] = 'Ese correo ya está registrado por otro usuario.';
-        }
-
-        if ($numeroExiste) {
-            $errores['numEmpleado'] =
-                'Ese número de empleado ya está registrado para ese origen.';
-        }
-
-        if ($errores) {
-            return back()->withErrors($errores)->withInput();
-        }
-
-        $tipoUsuarioActual = Auth::user()->idType
-            ?? Auth::user()->idtype
-            ?? Auth::user()->IDTYPE
-            ?? null;
-
-        $datos = [
-            'numEmpleado' => $request->input('numEmpleado'),
-            'firstName' => trim($request->input('nomUsuario')),
-            'lastName' => trim($request->input('appUsuario')),
-            'middleName' => trim($request->input('apmUsuario', '')),
-            'nivel' => trim($request->input('cargo')),
-            'unidad' => trim($request->input('unidad')),
-            'email' => $email,
-            'origen' => $origen,
-            'active' => $request->has('active')
-                ? $request->boolean('active')
-                : (bool) ($usuario->active ?? $usuario->ACTIVE),
-        ];
-
-        if ((int) $tipoUsuarioActual === 1 && $request->filled('idtype')) {
-            $datos['idType'] = $request->integer('idtype');
-        }
-
-        $usuario->update($datos);
-
-        return back()->with('success', 'Usuario actualizado correctamente.');
+    if (!$usuarioExiste) {
+        return response()->json([
+            'message' => 'No se encontró el usuario.',
+        ], 404);
     }
+
+    $email = strtolower(trim($request->input('email')));
+    $origen = $request->input('origen');
+    $numero = strtoupper(trim($request->input('numEmpleado')));
+
+    $errores = [];
+
+    $emailExiste = $db->table('users')
+        ->whereRaw('UPPER(EMAIL) = ?', [strtoupper($email)])
+        ->where('ID_USER', '<>', $idUsuario)
+        ->exists();
+
+    if ($emailExiste) {
+        $errores['email'] = [
+            'Ese correo ya está registrado por otro usuario.',
+        ];
+    }
+
+    $numeroExiste = $db->table('users')
+        ->whereRaw('UPPER(NUMEMPLEADO) = ?', [$numero])
+        ->whereRaw('UPPER(ORIGEN) = ?', [strtoupper($origen)])
+        ->where('ID_USER', '<>', $idUsuario)
+        ->exists();
+
+    if ($numeroExiste) {
+        $errores['numEmpleado'] = [
+            'Ese número de empleado ya está registrado para ese origen.',
+        ];
+    }
+
+    if ($errores) {
+        return response()->json([
+            'message' => 'No se pudo actualizar el usuario.',
+            'errors' => $errores,
+        ], 422);
+    }
+
+    $datos = [
+        'NUMEMPLEADO' => $numero,
+        'FIRSTNAME'   => trim($request->input('firstName')),
+        'LASTNAME'    => trim($request->input('lastName')),
+        'MIDDLENAME'  => trim($request->input('middleName', '')),
+        'NIVEL'       => trim($request->input('nivel')),
+        'UNIDAD'      => trim($request->input('unidad')),
+        'EMAIL'       => $email,
+        'ORIGEN'      => $origen,
+        'ACTIVE'      => $request->boolean('active') ? 1 : 0,
+    ];
+
+    $tipoUsuarioActual = Auth::user()->idType
+        ?? Auth::user()->idtype
+        ?? Auth::user()->IDTYPE
+        ?? null;
+
+    if ((int) $tipoUsuarioActual === 1 && $request->filled('idType')) {
+        $datos['IDTYPE'] = $request->integer('idType');
+    }
+
+    if ($request->filled('nuevaPassword')) {
+        $datos['PASSWORD'] = Hash::make($request->input('nuevaPassword'));
+        $datos['MUST_CHANGE_PASSWORD'] = '1';
+    }
+
+    $db->table('users')
+        ->where('ID_USER', $idUsuario)
+        ->update($datos);
+
+    return response()->json([
+        'message' => 'Usuario actualizado correctamente.',
+    ]);
+}
     public function buscarEmpleadoParaUsuario(Request $request)
     {
         $datos = $request->validate([
@@ -849,4 +867,3 @@ class AdminController extends Controller
         return array_merge($comunes, $especificas);
     }
 }
-    
