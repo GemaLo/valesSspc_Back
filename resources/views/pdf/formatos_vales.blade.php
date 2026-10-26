@@ -2,471 +2,524 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
+    <title>Formato de Recepción</title>
     <style>
         @page {
             size: letter portrait;
-            margin: 8mm 10mm 8mm 10mm;
-        }
-        body {
-            font-family: 'Helvetica', Arial, sans-serif;
-            font-size: 10px;
-            color: #000;
-            line-height: 1.3;
-        }
-        .page-break {
-            page-break-after: always;
-        }
-        
-        /* Contenedor que fuerza el uso de toda la altura de la página */
-        .sheet-container {
-            width: 100%;
-            height: 96vh;
-            max-height: 985px;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
+            margin: 12mm 15mm 12mm 15mm;
         }
 
-        /* Encabezado Institucional */
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Helvetica', 'Arial', sans-serif;
+            font-size: 11px;
+            color: #000;
+            line-height: 1.4;
+            margin: 0;
+            padding: 0;
+            background-color: #fff;
+        }
+
+        .page-container {
+            width: 100%;
+            height: 100%;
+            page-break-after: always;
+        }
+
+        .page-container:last-child {
+            page-break-after: avoid;
+        }
+
+        /* Encabezado Institucional (Sin logos) */
         .header-table {
             width: 100%;
             border-collapse: collapse;
-            margin-bottom: 10px;
+            margin-bottom: 20px;
         }
+
         .header-table td {
+            vertical-align: top;
             border: none;
             padding: 0;
-            vertical-align: top;
-        }
-        .institution-title {
-            font-size: 9px;
-            font-weight: bold;
-            line-height: 1.25;
-            text-transform: uppercase;
-        }
-        .date-box {
             text-align: right;
-            font-size: 9px;
-            font-weight: bold;
         }
 
-        /* Títulos del Documento */
-        .doc-title {
-            text-align: center;
+        .institution-title {
+            font-size: 11px;
             font-weight: bold;
-            font-size: 12px;
-            margin: 10px 0 4px 0;
+            line-height: 1.3;
+            color: #000;
+            text-transform: uppercase;
+        }
+
+        /* Bloque Principal del Título */
+        .title-block {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+
+        .title-main {
+            background-color: #b8860b; /* Color ocre / dorado oficial */
+            color: #fff;
+            font-weight: bold;
+            font-size: 13px;
+            text-align: center;
+            padding: 10px;
             text-transform: uppercase;
             letter-spacing: 0.5px;
-        }
-        .doc-subtitle {
-            text-align: center;
-            font-weight: bold;
-            font-size: 10px;
-            margin-bottom: 15px;
-            text-transform: uppercase;
+            border: 1px solid #7f5e06;
         }
 
-        /* Tablas de Estilo Excel extendidas */
-        table.excel-grid {
+        .title-sub {
+            background-color: #dcdcdc;
+            color: #000;
+            font-weight: bold;
+            font-size: 11px;
+            text-align: center;
+            padding: 10px;
+            text-transform: uppercase;
+            border: 1px solid #888;
+            border-top: none;
+        }
+
+        /* Tablas Grid Estilo Formato Oficial */
+        table.doc-table {
             width: 100%;
             border-collapse: collapse;
             table-layout: fixed;
-            margin-bottom: 8px;
+            margin-bottom: 20px;
         }
-        table.excel-grid th, table.excel-grid td {
-            border: 1px solid #000;
-            padding: 6px 8px;
-            font-size: 9.5px;
+
+        table.doc-table th, 
+        table.doc-table td {
+            border: 1px solid #555;
+            padding: 8px 10px;
+            font-size: 10.5px;
             vertical-align: middle;
             word-wrap: break-word;
         }
-        .bg-gray {
+
+        .bg-section-header {
+            background-color: #808080;
+            color: #fff;
+            font-weight: bold;
+            text-transform: uppercase;
+            text-align: center;
+            font-size: 11px;
+            padding: 8px !important;
+            letter-spacing: 0.5px;
+        }
+
+        .bg-label {
             background-color: #dcdcdc;
             font-weight: bold;
+            text-transform: uppercase;
+            text-align: center;
+            font-size: 10px;
         }
+
         .text-center { text-align: center; }
         .text-right { text-align: right; }
+        .text-justify { text-align: justify; }
         .bold { font-weight: bold; }
+        .font-mono { font-family: 'Courier New', Courier, monospace; }
 
-        /* Bloque de Firmas espaciado para cubrir la parte inferior */
-        .signature-section {
-            margin-top: 30px;
-            margin-bottom: 15px;
-        }
-        .signature-table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        .signature-table td {
-            border: none;
+        /* Estilos específicos de Firma y Huella */
+        .box-signature {
+            height: 120px;
+            vertical-align: bottom !important;
+            padding-bottom: 12px !important;
             text-align: center;
-            font-size: 9px;
-            vertical-align: top;
-            width: 50%;
-            padding: 0 20px;
-        }
-        .signature-line {
-            border-top: 1px solid #000;
-            width: 100%;
-            margin: 55px auto 6px auto;
+            font-weight: bold;
+            font-size: 10px;
         }
 
-        /* Nota al pie y metadatos */
-        .footer-note {
-            font-size: 8.5px;
-            text-align: justify;
-            border: 1px solid #000;
-            padding: 8px 10px;
-            margin-top: 10px;
-            background-color: #f9f9f9;
+        .legal-constancy {
+            font-size: 9px;
+            text-align: center;
+            font-weight: bold;
+            line-height: 1.3;
+            padding: 10px !important;
+            background-color: #e8e8e8;
         }
+
+        .digit-cell {
+            width: 25px;
+            text-align: center;
+            font-weight: bold;
+            font-size: 12px;
+            font-family: 'Courier New', Courier, monospace;
+        }
+
+        .alert-box {
+            border: 1px solid #555;
+            padding: 10px 12px;
+            margin-top: -10px;
+            margin-bottom: 20px;
+            font-size: 10px;
+            background-color: #f9f9f9;
+            line-height: 1.4;
+        }
+
         .meta-info {
-            font-size: 8px;
+            font-size: 8.5px;
             text-align: right;
-            margin-top: 8px;
-            color: #222;
+            margin-top: 10px;
+            color: #444;
+            font-family: monospace;
         }
     </style>
 </head>
 <body>
-    @php
-        $nombreCompleto = $empleado->NOMBRECOMPLETO
-            ?? $empleado->nombrecompleto
-            ?? $empleado->nombreCompleto
-            ?? trim(
-                ($empleado->NOMEMPLEADO ?? $empleado->nomEmpleado ?? $empleado->nomempleado ?? '')
-                . ' '
-                . ($empleado->APPEMPLEADO ?? $empleado->appEmpleado ?? $empleado->appempleado ?? '')
-            );
 
-        $nombreCompleto = strtoupper($nombreCompleto ?: '-');
+@php
+    $nombre = $empleado->NOMBRECOMPLETO 
+        ?? $empleado->nombrecompleto 
+        ?? $empleado->nombreCompleto 
+        ?? trim(($empleado->NOMEMPLEADO ?? $empleado->nomEmpleado ?? $empleado->nomempleado ?? '') . ' ' . ($empleado->APPEMPLEADO ?? $empleado->appEmpleado ?? $empleado->appempleado ?? ''));
+    
+    $nombreCompleto = strtoupper($nombre ?: '-');
 
-        $numeroEmpleado = $empleado->NUMEMPLEADO
-            ?? $empleado->numEmpleado
-            ?? $empleado->numempleado
-            ?? '-';
+    $numeroEmpleado = $empleado->NUMEMPLEADO ?? $empleado->numEmpleado ?? $empleado->numempleado ?? '-';
+    $cuentaInicial  = $empleado->CUENTAINICIAL ?? $empleado->cuentaInicial ?? $empleado->cuentainicial ?? 'PENDIENTE DE ASIGNAR';
+    $cargo          = $empleado->PUESTO ?? $empleado->cargo ?? '-';
+    $unidad         = $empleado->UR ?? $empleado->unidad ?? '-';
+    $rfc            = $empleado->RFC ?? $empleado->rfc ?? '-';
+    $telefono       = $empleado->TELEFONO ?? $empleado->telefono ?? '';
+    $correo         = $empleado->CORREO ?? $empleado->correo ?? '';
+    $fechaActual    = date('d/m/Y');
+    $fechaHoraMeta  = date('Y-m-d H:i');
 
-        $cuentaInicial = $empleado->CUENTAINICIAL
-            ?? $empleado->cuentaInicial
-            ?? $empleado->cuentainicial
-            ?? 'PENDIENTE DE ASIGNAR';
+    // Convertir el número de tarjeta en arreglo de dígitos para la casilla separada
+    $digits = str_split(str_pad(preg_replace('/[^0-9]/', '', $cuentaInicial), 11, '0', STR_PAD_LEFT));
+@endphp
 
-        $cargo = $empleado->PUESTO
-            ?? $empleado->cargo
-            ?? '-';
+<!-- ========================================================================= -->
+<!-- HOJA 1: INTEGRANTE                                                        -->
+<!-- ========================================================================= -->
+<div class="page-container">
+    <table class="header-table">
+        <tr>
+            <td>
+                <div class="institution-title">
+                    
+                    COORDINACIÓN DE ADMINISTRACIÓN Y FINANZAS<br>
+                    DIRECCIÓN GENERAL DE RECURSOS HUMANOS
+                </div>
+            </td>
+        </tr>
+    </table>
 
-        $unidad = $empleado->UR
-            ?? $empleado->unidad
-            ?? '-';
+    <table class="title-block">
+        <tr>
+            <td class="title-main">FORMATO DE RECEPCIÓN</td>
+        </tr>
+        <tr>
+            <td class="title-sub">
+                EN LA MODALIDAD DE TARJETA ELECTRÓNICA<br>
+                DE LA MEDIDA DE FIN DE AÑO 2026
+            </td>
+        </tr>
+    </table>
 
-        $rfc = $empleado->RFC
-            ?? $empleado->rfc
-            ?? '-';
-    @endphp
+    <!-- DATOS DE LA ENTREGA -->
+    <table class="doc-table">
+        <tr>
+            <td colspan="4" class="bg-section-header">DATOS DE LA ENTREGA</td>
+        </tr>
+        <tr>
+            <td class="bg-label" style="width: 30%;">FECHA</td>
+            <td class="bg-label" colspan="3" style="width: 70%;">NOMBRE DE QUIEN RECIBE</td>
+        </tr>
+        <tr>
+            <td class="text-center bold" style="height: 30px;">{{ $fechaActual }}</td>
+            <td class="text-center bold" colspan="3" style="font-size: 11.5px;">{{ $nombreCompleto }}</td>
+        </tr>
+        <tr>
+            <td class="bg-label">EXPEDIENTE</td>
+            <td class="bg-label">GRADO / CARGO</td>
+            <td class="bg-label">RFC</td>
+            <td class="bg-label">IMPORTE</td>
+        </tr>
+        <tr>
+            <td class="text-center bold font-mono" style="height: 30px;">{{ $numeroEmpleado }}</td>
+            <td class="text-center bold">{{ $cargo }}</td>
+            <td class="text-center bold font-mono">{{ $rfc }}</td>
+            <td class="text-center bold font-mono">$14,900.00</td>
+        </tr>
+        <tr>
+            <td colspan="4" class="bg-label">ADSCRIPCIÓN</td>
+        </tr>
+        <tr>
+            <td colspan="4" class="text-center bold" style="height: 35px;">{{ $unidad }}</td>
+        </tr>
+    </table>
 
-    <!-- ========================================================================= -->
-    <!-- HOJA 1: INTEGRANTE                                                        -->
-    <!-- ========================================================================= -->
-    <div class="sheet-container">
-        <div>
-            <table class="header-table">
-                <tr>
-                    <td style="width: 70%;">
-                        <div class="institution-title">
-                            GUARDIA NACIONAL<br>
-                            COORDINACIÓN DE ADMINISTRACIÓN Y FINANZAS<br>
-                            DIRECCIÓN GENERAL DE RECURSOS HUMANOS
-                        </div>
-                    </td>
-                    <td style="width: 30%;">
-                        <div class="date-box">FECHA: {{ date('d/m/Y') }}</div>
-                    </td>
-                </tr>
-            </table>
+    <!-- IDENTIFICADOR Y TARJETA DESGLOSADA EN CASILLAS -->
+    <table class="doc-table">
+        <tr>
+            <td class="bg-label" colspan="11">NÚMERO DE TARJETA</td>
+        </tr>
+        <tr>
+            @foreach(array_slice($digits, 0, 11) as $digit)
+                <td class="digit-cell">{{ $digit }}</td>
+            @endforeach
+        </tr>
+    </table>
 
-            <div class="doc-title">FORMATO DE RECEPCIÓN DE INTEGRANTE</div>
-            <div class="doc-subtitle">EN LA MODALIDAD DE TARJETA ELECTRÓNICA DE LA MEDIDA DE FIN DE AÑO 2026</div>
-
-            <table class="excel-grid">
-                <tr>
-                    <td colspan="2" class="bg-gray text-center">DATOS DE LA ENTREGA</td>
-                </tr>
-                <tr>
-                    <td class="bold" style="width: 25%;">FECHA</td>
-                    <td class="bold" style="width: 75%;">NOMBRE DE QUIEN RECIBE</td>
-                </tr>
-                <tr>
-                    <td>{{ date('d/m/Y') }}</td>
-                    <td class="bold" style="font-size: 10.5px;">{{ $nombreCompleto }}</td>
-                </tr>
-            </table>
-
-            <table class="excel-grid" style="margin-top: -8px;">
-                <tr>
-                    <td class="bold" style="width: 20%;">EXPEDIENTE</td>
-                    <td class="bold" style="width: 35%;">GRADO / CARGO</td>
-                    <td class="bold" style="width: 30%;">RFC</td>
-                    <td class="bold" style="width: 15%;">IMPORTE</td>
-                </tr>
-                <tr>
-                    <td class="text-center">{{ $numeroEmpleado }}</td>
-                    <td>{{ $cargo }}</td>
-                    <td class="bold text-center">{{ $rfc }}</td>
-                    <td class="bold text-right">$14,900.00</td>
-                </tr>
-            </table>
-
-            <table class="excel-grid" style="margin-top: -8px;">
-                <tr>
-                    <td class="bold" style="width: 20%;">ADSCRIPCIÓN</td>
-                    <td style="width: 80%; font-size: 10px;">{{ $unidad }}</td>
-                </tr>
-            </table>
-
-            <table class="excel-grid" style="margin-top: 10px;">
-                <tr>
-                    <td class="bold bg-gray" style="width: 40%;">IDENTIFICADOR</td>
-                    <td class="bold bg-gray" style="width: 60%;">NÚMERO DE TARJETA</td>
-                </tr>
-                <tr>
-                    <td style="padding: 10px;">TARJETA ELECTRÓNICA DE FIN DE AÑO</td>
-                    <td class="bold text-center" style="font-size: 13px; background-color: #f5f5f5; padding: 10px;">
-                        {{ $cuentaInicial }}
-                    </td>
-                </tr>
-            </table>
-        </div>
-
-        <div>
-            <div class="signature-section">
-                <table class="signature-table">
-                    <tr>
-                        <td>
-                            <div class="signature-line"></div>
-                            <strong>NOMBRE Y FIRMA DE QUIEN RECIBE</strong>
-                        </td>
-                        <td>
-                            <div class="signature-line"></div>
-                            <strong>VO. BO. / NOMBRE Y FIRMA</strong>
-                        </td>
-                    </tr>
-                </table>
-            </div>
-
-            <div class="footer-note">
+    <!-- SECCIÓN DE FIRMAS Y DATOS DE QUIEN RECIBE -->
+    <table class="doc-table">
+        <tr>
+            <td colspan="2" class="bg-section-header" style="width: 65%;">DATOS DE QUIEN RECIBE</td>
+            <td class="bg-section-header" style="width: 35%;">VO. BO.</td>
+        </tr>
+        <tr>
+            <td class="box-signature" style="width: 32.5%;">
+                NOMBRE Y FIRMA
+            </td>
+            <td class="box-signature" style="width: 32.5%;">
+                HUELLA DIGITAL
+            </td>
+            <td class="box-signature" style="width: 35%;">
+                NOMBRE Y FIRMA
+            </td>
+        </tr>
+        <tr>
+            <td class="bg-label">TELÉFONO</td>
+            <td class="text-center bold" style="height: 28px;">{{ $telefono }}</td>
+            <td rowspan="2" class="legal-constancy">
                 HAGO CONSTAR QUE LOS DATOS PLASMADOS EN ESTE FORMATO FUERON DEBIDAMENTE VERIFICADOS Y SE ENCUENTRAN CORRECTOS.
-            </div>
+            </td>
+        </tr>
+        <tr>
+            <td class="bg-label">CORREO ELECTRÓNICO</td>
+            <td class="text-center bold">{{ $correo }}</td>
+        </tr>
+    </table>
 
-            <div class="meta-info">
-                USUARIO QUE GENERA: 70490 &nbsp;|&nbsp; FECHA Y HORA: {{ date('Y-m-d H:i') }}
-            </div>
-        </div>
+    <div class="meta-info">
+        USUARIO QUE GENERA: 70490 &nbsp;|&nbsp; FECHA Y HORA: {{ $fechaHoraMeta }}
+    </div>
+</div>
+
+<!-- ========================================================================= -->
+<!-- HOJA 2: INTEGRANTE CON PENSIÓN ALIMENTICIA                                -->
+<!-- ========================================================================= -->
+<div class="page-container">
+    <table class="header-table">
+        <tr>
+            <td>
+                <div class="institution-title">
+                    COORDINACIÓN DE ADMINISTRACIÓN Y FINANZAS<br>
+                    DIRECCIÓN GENERAL DE RECURSOS HUMANOS
+                </div>
+            </td>
+        </tr>
+    </table>
+
+    <table class="title-block">
+        <tr>
+            <td class="title-main">FORMATO DE RECEPCIÓN DE INTEGRANTE CON PENSIÓN ALIMENTICIA</td>
+        </tr>
+        <tr>
+            <td class="title-sub">
+                EN LA MODALIDAD DE TARJETA ELECTRÓNICA<br>
+                DE LA MEDIDA DE FIN DE AÑO 2026
+            </td>
+        </tr>
+    </table>
+
+    <table class="doc-table">
+        <tr>
+            <td colspan="4" class="bg-section-header">DATOS DE LA ENTREGA</td>
+        </tr>
+        <tr>
+            <td class="bg-label" style="width: 30%;">FECHA</td>
+            <td class="bg-label" colspan="3" style="width: 70%;">NOMBRE DE QUIEN RECIBE</td>
+        </tr>
+        <tr>
+            <td class="text-center bold" style="height: 30px;">{{ $fechaActual }}</td>
+            <td class="text-center bold" colspan="3" style="font-size: 11.5px;">{{ $nombreCompleto }}</td>
+        </tr>
+        <tr>
+            <td class="bg-label">EXPEDIENTE</td>
+            <td class="bg-label">GRADO / CARGO</td>
+            <td class="bg-label">RFC</td>
+            <td class="bg-label">IMPORTE</td>
+        </tr>
+        <tr>
+            <td class="text-center bold font-mono" style="height: 30px;">{{ $numeroEmpleado }}</td>
+            <td class="text-center bold">{{ $cargo }}</td>
+            <td class="text-center bold font-mono">{{ $rfc }}</td>
+            <td class="text-center bold font-mono">$14,900.00</td>
+        </tr>
+        <tr>
+            <td colspan="4" class="bg-label">ADSCRIPCIÓN</td>
+        </tr>
+        <tr>
+            <td colspan="4" class="text-center bold" style="height: 35px;">{{ $unidad }}</td>
+        </tr>
+    </table>
+
+    <table class="doc-table">
+        <tr>
+            <td class="bg-label" colspan="11">NÚMERO DE TARJETA (PENSIÓN)</td>
+        </tr>
+        <tr>
+            @foreach(array_slice($digits, 0, 11) as $digit)
+                <td class="digit-cell">{{ $digit }}</td>
+            @endforeach
+        </tr>
+    </table>
+
+    <div class="alert-box text-justify">
+        <strong>Integrante:</strong> Se le exhorta a informar a su(s) beneficiaria(os) de pensión alimenticia, que debe(n) de acudir a la sede de Xochimilco en la Ciudad de México, a recoger los vales de despensa que les corresponde, a partir del 07 de enero de 2026 al 12 de junio de 2026.
     </div>
 
-    <div class="page-break"></div>
-
-    <!-- ========================================================================= -->
-    <!-- HOJA 2: INTEGRANTE CON PENSIÓN ALIMENTICIA                                -->
-    <!-- ========================================================================= -->
-    <div class="sheet-container">
-        <div>
-            <table class="header-table">
-                <tr>
-                    <td style="width: 70%;">
-                        <div class="institution-title">
-                            GUARDIA NACIONAL<br>
-                            COORDINACIÓN DE ADMINISTRACIÓN Y FINANZAS<br>
-                            DIRECCIÓN GENERAL DE RECURSOS HUMANOS
-                        </div>
-                    </td>
-                    <td style="width: 30%;">
-                        <div class="date-box">FECHA: {{ date('d/m/Y') }}</div>
-                    </td>
-                </tr>
-            </table>
-
-            <div class="doc-title">FORMATO DE RECEPCIÓN DE INTEGRANTE CON PENSIÓN ALIMENTICIA</div>
-            <div class="doc-subtitle">EN LA MODALIDAD DE TARJETA ELECTRÓNICA DE LA MEDIDA DE FIN DE AÑO 2026</div>
-
-            <table class="excel-grid">
-                <tr>
-                    <td colspan="2" class="bg-gray text-center">DATOS DE LA ENTREGA</td>
-                </tr>
-                <tr>
-                    <td class="bold" style="width: 25%;">FECHA</td>
-                    <td class="bold" style="width: 75%;">NOMBRE DE QUIEN RECIBE</td>
-                </tr>
-                <tr>
-                    <td>{{ date('d/m/Y') }}</td>
-                    <td class="bold" style="font-size: 10.5px;">{{ $nombreCompleto }}</td>
-                </tr>
-            </table>
-
-            <table class="excel-grid" style="margin-top: -8px;">
-                <tr>
-                    <td class="bold" style="width: 20%;">EXPEDIENTE</td>
-                    <td class="bold" style="width: 35%;">GRADO / CARGO</td>
-                    <td class="bold" style="width: 30%;">RFC</td>
-                    <td class="bold" style="width: 15%;">IMPORTE</td>
-                </tr>
-                <tr>
-                    <td class="text-center">{{ $numeroEmpleado }}</td>
-                    <td>{{ $cargo }}</td>
-                    <td class="bold text-center">{{ $rfc }}</td>
-                    <td class="bold text-right">$14,900.00</td>
-                </tr>
-            </table>
-
-            <table class="excel-grid" style="margin-top: -8px;">
-                <tr>
-                    <td class="bold" style="width: 20%;">ADSCRIPCIÓN</td>
-                    <td style="width: 80%; font-size: 10px;">{{ $unidad }}</td>
-                </tr>
-            </table>
-
-            <table class="excel-grid" style="margin-top: 10px;">
-                <tr>
-                    <td class="bold bg-gray" style="width: 40%;">IDENTIFICADOR</td>
-                    <td class="bold bg-gray" style="width: 60%;">NÚMERO DE TARJETA (PENSIÓN)</td>
-                </tr>
-                <tr>
-                    <td style="padding: 10px;">TARJETA ELECTRÓNICA (PENSIÓN ALIMENTICIA)</td>
-                    <td class="bold text-center" style="font-size: 13px; background-color: #f5f5f5; padding: 10px;">
-                        {{ $cuentaInicial }}
-                    </td>
-                </tr>
-            </table>
-
-            <div style="border: 1px solid #000; padding: 8px 10px; margin-top: 10px; font-size: 9px; background-color: #fafafa; text-align: justify;">
-                <strong>Integrante:</strong> Se le exhorta a informar a su(s) beneficiaria(os) de pensión alimenticia, que debe(n) de acudir a la sede de Xochimilco en la Ciudad de México, a recoger los vales de despensa que les corresponde, a partir del 7 Ene. 2026 al 12 Jun. 2026.
-            </div>
-        </div>
-
-        <div>
-            <div class="signature-section">
-                <table class="signature-table">
-                    <tr>
-                        <td>
-                            <div class="signature-line"></div>
-                            <strong>NOMBRE Y FIRMA</strong>
-                        </td>
-                        <td>
-                            <div class="signature-line"></div>
-                            <strong>VO. BO.</strong>
-                        </td>
-                    </tr>
-                </table>
-            </div>
-
-            <div class="meta-info">
-                USUARIO QUE GENERA: 70490 &nbsp;|&nbsp; FECHA Y HORA: {{ date('Y-m-d H:i') }}
-            </div>
-        </div>
-    </div>
-
-    <div class="page-break"></div>
-
-    <!-- ========================================================================= -->
-    <!-- HOJA 3: REPOSICIÓN                                                        -->
-    <!-- ========================================================================= -->
-    <div class="sheet-container">
-        <div>
-            <table class="header-table">
-                <tr>
-                    <td style="width: 70%;">
-                        <div class="institution-title">
-                            GUARDIA NACIONAL<br>
-                            COORDINACIÓN DE ADMINISTRACIÓN Y FINANZAS<br>
-                            DIRECCIÓN GENERAL DE RECURSOS HUMANOS
-                        </div>
-                    </td>
-                    <td style="width: 30%;">
-                        <div class="date-box">FECHA: {{ date('d/m/Y') }}</div>
-                    </td>
-                </tr>
-            </table>
-
-            <div class="doc-title">FORMATO DE RECEPCIÓN</div>
-            <div class="doc-subtitle">EN LA MODALIDAD DE TARJETA ELECTRÓNICA DE REPOSICIÓN DE LA MEDIDA DE FIN DE AÑO 2026</div>
-
-            <table class="excel-grid">
-                <tr>
-                    <td colspan="2" class="bg-gray text-center">DATOS DE LA ENTREGA</td>
-                </tr>
-                <tr>
-                    <td class="bold" style="width: 25%;">FECHA</td>
-                    <td class="bold" style="width: 75%;">NOMBRE DE QUIEN RECIBE</td>
-                </tr>
-                <tr>
-                    <td>{{ date('d/m/Y') }}</td>
-                    <td class="bold" style="font-size: 10.5px;">{{ $nombreCompleto }}</td>
-                </tr>
-            </table>
-
-            <table class="excel-grid" style="margin-top: -8px;">
-                <tr>
-                    <td class="bold" style="width: 20%;">EXPEDIENTE</td>
-                    <td class="bold" style="width: 35%;">GRADO</td>
-                    <td class="bold" style="width: 30%;">RFC</td>
-                    <td class="bold" style="width: 15%;">IMPORTE</td>
-                </tr>
-                <tr>
-                    <td class="text-center">{{ $numeroEmpleado }}</td>
-                    <td>{{ $cargo }}</td>
-                    <td class="bold text-center">{{ $rfc }}</td>
-                    <td class="bold text-right">$14,900.00</td>
-                </tr>
-            </table>
-
-            <table class="excel-grid" style="margin-top: -8px;">
-                <tr>
-                    <td class="bold" style="width: 20%;">ADSCRIPCIÓN</td>
-                    <td style="width: 80%; font-size: 10px;">
-                        {{ $unidad }}<br>
-                        SECRETARIA DE SEGURIDAD Y PROTECCIÓN CIUDADANA
-                    </td>
-                </tr>
-            </table>
-
-            <table class="excel-grid" style="margin-top: 10px;">
-                <tr>
-                    <td class="bold bg-gray" style="width: 40%;">IDENTIFICADOR</td>
-                    <td class="bold bg-gray" style="width: 60%;">NÚMERO DE TARJETA (REPOSICIÓN)</td>
-                </tr>
-                <tr>
-                    <td style="padding: 10px;">TARJETA ELECTRÓNICA DE REPOSICIÓN</td>
-                    <td class="bold text-center" style="font-size: 13px; background-color: #f5f5f5; padding: 10px;">
-                        {{ $cuentaInicial }}
-                    </td>
-                </tr>
-            </table>
-        </div>
-
-        <div>
-            <div class="signature-section">
-                <table class="signature-table">
-                    <tr>
-                        <td>
-                            <div class="signature-line"></div>
-                            <strong>NOMBRE Y FIRMA DE QUIEN RECIBE</strong>
-                        </td>
-                        <td>
-                            <div class="signature-line"></div>
-                            <strong>VO. BO.</strong>
-                        </td>
-                    </tr>
-                </table>
-            </div>
-
-            <div class="footer-note">
+    <table class="doc-table">
+        <tr>
+            <td colspan="2" class="bg-section-header" style="width: 65%;">DATOS DE QUIEN RECIBE</td>
+            <td class="bg-section-header" style="width: 35%;">VO. BO.</td>
+        </tr>
+        <tr>
+            <td class="box-signature" style="width: 32.5%;">
+                NOMBRE Y FIRMA
+            </td>
+            <td class="box-signature" style="width: 32.5%;">
+                HUELLA DIGITAL
+            </td>
+            <td class="box-signature" style="width: 35%;">
+                NOMBRE Y FIRMA
+            </td>
+        </tr>
+        <tr>
+            <td class="bg-label">TELÉFONO</td>
+            <td class="text-center bold" style="height: 28px;">{{ $telefono }}</td>
+            <td rowspan="2" class="legal-constancy">
                 HAGO CONSTAR QUE LOS DATOS PLASMADOS EN ESTE FORMATO FUERON DEBIDAMENTE VERIFICADOS Y SE ENCUENTRAN CORRECTOS.
-            </div>
+            </td>
+        </tr>
+        <tr>
+            <td class="bg-label">CORREO ELECTRÓNICO</td>
+            <td class="text-center bold">{{ $correo }}</td>
+        </tr>
+    </table>
 
-            <div class="meta-info">
-                USUARIO QUE GENERA: 70490 &nbsp;|&nbsp; FECHA Y HORA: {{ date('Y-m-d H:i') }}
-            </div>
-        </div>
+    <div class="meta-info">
+        USUARIO QUE GENERA: 70490 &nbsp;|&nbsp; FECHA Y HORA: {{ $fechaHoraMeta }}
     </div>
+</div>
+
+<!-- ========================================================================= -->
+<!-- HOJA 3: REPOSICIÓN                                                        -->
+<!-- ========================================================================= -->
+<div class="page-container">
+    <table class="header-table">
+        <tr>
+            <td>
+                <div class="institution-title">
+                    COORDINACIÓN DE ADMINISTRACIÓN Y FINANZAS<br>
+                    DIRECCIÓN GENERAL DE RECURSOS HUMANOS
+                </div>
+            </td>
+        </tr>
+    </table>
+
+    <table class="title-block">
+        <tr>
+            <td class="title-main">FORMATO DE RECEPCIÓN</td>
+        </tr>
+        <tr>
+            <td class="title-sub">
+                EN LA MODALIDAD DE TARJETA ELECTRÓNICA<br>
+                DE REPOSICIÓN DE LA MEDIDA DE FIN DE AÑO 2026
+            </td>
+        </tr>
+    </table>
+
+    <table class="doc-table">
+        <tr>
+            <td colspan="4" class="bg-section-header">DATOS DE LA ENTREGA</td>
+        </tr>
+        <tr>
+            <td class="bg-label" style="width: 30%;">FECHA</td>
+            <td class="bg-label" colspan="3" style="width: 70%;">NOMBRE DE QUIEN RECIBE</td>
+        </tr>
+        <tr>
+            <td class="text-center bold" style="height: 30px;">{{ $fechaActual }}</td>
+            <td class="text-center bold" colspan="3" style="font-size: 11.5px;">{{ $nombreCompleto }}</td>
+        </tr>
+        <tr>
+            <td class="bg-label">EXPEDIENTE</td>
+            <td class="bg-label">GRADO</td>
+            <td class="bg-label">RFC</td>
+            <td class="bg-label">IMPORTE</td>
+        </tr>
+        <tr>
+            <td class="text-center bold font-mono" style="height: 30px;">{{ $numeroEmpleado }}</td>
+            <td class="text-center bold">{{ $cargo }}</td>
+            <td class="text-center bold font-mono">{{ $rfc }}</td>
+            <td class="text-center bold font-mono">$14,900.00</td>
+        </tr>
+        <tr>
+            <td colspan="4" class="bg-label">ADSCRIPCIÓN</td>
+        </tr>
+        <tr>
+            <td colspan="4" class="text-center bold" style="height: 35px;">
+                {{ $unidad }}<br>
+                SECRETARÍA DE SEGURIDAD Y PROTECCIÓN CIUDADANA
+            </td>
+        </tr>
+    </table>
+
+    <table class="doc-table">
+        <tr>
+            <td class="bg-label" colspan="11">NÚMERO DE TARJETA</td>
+        </tr>
+        <tr>
+            @foreach(array_slice($digits, 0, 11) as $digit)
+                <td class="digit-cell">{{ $digit }}</td>
+            @endforeach
+        </tr>
+    </table>
+
+    <table class="doc-table">
+        <tr>
+            <td colspan="2" class="bg-section-header" style="width: 65%;">DATOS DE QUIEN RECIBE</td>
+            <td class="bg-section-header" style="width: 35%;">VO. BO.</td>
+        </tr>
+        <tr>
+            <td class="box-signature" style="width: 32.5%;">
+                NOMBRE Y FIRMA
+            </td>
+            <td class="box-signature" style="width: 32.5%;">
+                HUELLA DIGITAL
+            </td>
+            <td class="box-signature" style="width: 35%;">
+                NOMBRE Y FIRMA
+            </td>
+        </tr>
+        <tr>
+            <td class="bg-label">TELÉFONO</td>
+            <td class="text-center bold" style="height: 28px;">{{ $telefono }}</td>
+            <td rowspan="2" class="legal-constancy">
+                HAGO CONSTAR QUE LOS DATOS PLASMADOS EN ESTE FORMATO FUERON DEBIDAMENTE VERIFICADOS Y SE ENCUENTRAN CORRECTOS.
+            </td>
+        </tr>
+        <tr>
+            <td class="bg-label">CORREO ELECTRÓNICO</td>
+            <td class="text-center bold">{{ $correo }}</td>
+        </tr>
+    </table>
+
+    <div class="meta-info">
+        USUARIO QUE GENERA: 70490 &nbsp;|&nbsp; FECHA Y HORA: {{ $fechaHoraMeta }}
+    </div>
+</div>
+
 </body>
 </html>
