@@ -19,5 +19,15 @@ class StatusSeeder extends Seeder
             'idStatus' => 2,
             'status' => 'Entregado'
         ]);
+
+        DB::table('status')->insert([
+            'idStatus' => 3,
+            'status' => 'Sustituida'
+        ]);
+
+        DB::table('status')->insert([
+            'idStatus' => 4,
+            'status' => 'Cancelada'
+        ]);
     }
 }

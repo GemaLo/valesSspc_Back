@@ -30,8 +30,6 @@ class AdminController extends Controller
                     'APPEMPLEADO',
                     'APMEMPLEADO',
                     'UR',
-                    'RFC',
-                    'CURP',
                     'NSS',
                     'NIVEL',
                     'PUESTO',
@@ -47,6 +45,7 @@ class AdminController extends Controller
                     'UPDATED_AT',
                 ])
                 ->whereYear('CREATED_AT', now()->year);
+
             if ($estatus !== 'todos' && $estatus !== null) {
                 $query->where('IDSTATUS', $estatus);
             }
@@ -55,13 +54,14 @@ class AdminController extends Controller
 
             return response()->json([
                 'status' => true,
-                'data' => $registros
+                'data' => $registros,
             ]);
         } catch (\Exception $e) {
-            \Log::error("Error en obtenerRegistrosVales: " . $e->getMessage());
+            Log::error('Error en obtenerRegistrosVales: ' . $e->getMessage());
+
             return response()->json([
                 'status' => false,
-                'message' => 'Error al consultar registros: ' . $e->getMessage()
+                'message' => 'Error al consultar registros: ' . $e->getMessage(),
             ], 500);
         }
     }
@@ -70,9 +70,8 @@ class AdminController extends Controller
     {
         $request->validate([
             'idRegister' => 'required',
-            'idStatus' => 'required|integer|in:1,2'
+            'idStatus' => 'required|integer|in:1,2,3,4',
         ]);
-
         try {
             $registro = Register::on('oracle_primary')->findOrFail($request->idRegister);
             $registro->idStatus = $request->idStatus;
@@ -547,104 +546,104 @@ class AdminController extends Controller
     }
 
     public function actualizarUsuario(Request $request, $id_user)
-{
-    $request->validate([
-        'numEmpleado' => ['required', 'string', 'max:20'],
-        'origen'      => ['required', 'in:secretaría,guardia'],
-        'firstName'   => ['required', 'string', 'max:255'],
-        'lastName'    => ['required', 'string', 'max:255'],
-        'middleName'  => ['nullable', 'string', 'max:255'],
-        'nivel'       => ['required', 'string', 'max:255'],
-        'unidad'      => ['required', 'string', 'max:255'],
-        'email'       => ['required', 'email', 'max:255'],
-        'active'      => ['required', 'boolean'],
-        'idType'      => ['nullable', 'integer'],
-        'nuevaPassword' => ['nullable', 'string', 'min:8'],
-    ]);
+    {
+        $request->validate([
+            'numEmpleado' => ['required', 'string', 'max:20'],
+            'origen'      => ['required', 'in:secretaría,guardia'],
+            'firstName'   => ['required', 'string', 'max:255'],
+            'lastName'    => ['required', 'string', 'max:255'],
+            'middleName'  => ['nullable', 'string', 'max:255'],
+            'nivel'       => ['required', 'string', 'max:255'],
+            'unidad'      => ['required', 'string', 'max:255'],
+            'email'       => ['required', 'email', 'max:255'],
+            'active'      => ['required', 'boolean'],
+            'idType'      => ['nullable', 'integer'],
+            'nuevaPassword' => ['nullable', 'string', 'min:8'],
+        ]);
 
-    $idUsuario = (int) $id_user;
-    $db = DB::connection('oracle_primary');
+        $idUsuario = (int) $id_user;
+        $db = DB::connection('oracle_primary');
 
-    $usuarioExiste = $db->table('users')
-        ->where('ID_USER', $idUsuario)
-        ->exists();
+        $usuarioExiste = $db->table('users')
+            ->where('ID_USER', $idUsuario)
+            ->exists();
 
-    if (!$usuarioExiste) {
-        return response()->json([
-            'message' => 'No se encontró el usuario.',
-        ], 404);
-    }
+        if (!$usuarioExiste) {
+            return response()->json([
+                'message' => 'No se encontró el usuario.',
+            ], 404);
+        }
 
-    $email = strtolower(trim($request->input('email')));
-    $origen = $request->input('origen');
-    $numero = strtoupper(trim($request->input('numEmpleado')));
+        $email = strtolower(trim($request->input('email')));
+        $origen = $request->input('origen');
+        $numero = strtoupper(trim($request->input('numEmpleado')));
 
-    $errores = [];
+        $errores = [];
 
-    $emailExiste = $db->table('users')
-        ->whereRaw('UPPER(EMAIL) = ?', [strtoupper($email)])
-        ->where('ID_USER', '<>', $idUsuario)
-        ->exists();
+        $emailExiste = $db->table('users')
+            ->whereRaw('UPPER(EMAIL) = ?', [strtoupper($email)])
+            ->where('ID_USER', '<>', $idUsuario)
+            ->exists();
 
-    if ($emailExiste) {
-        $errores['email'] = [
-            'Ese correo ya está registrado por otro usuario.',
+        if ($emailExiste) {
+            $errores['email'] = [
+                'Ese correo ya está registrado por otro usuario.',
+            ];
+        }
+
+        $numeroExiste = $db->table('users')
+            ->whereRaw('UPPER(NUMEMPLEADO) = ?', [$numero])
+            ->whereRaw('UPPER(ORIGEN) = ?', [strtoupper($origen)])
+            ->where('ID_USER', '<>', $idUsuario)
+            ->exists();
+
+        if ($numeroExiste) {
+            $errores['numEmpleado'] = [
+                'Ese número de empleado ya está registrado para ese origen.',
+            ];
+        }
+
+        if ($errores) {
+            return response()->json([
+                'message' => 'No se pudo actualizar el usuario.',
+                'errors' => $errores,
+            ], 422);
+        }
+
+        $datos = [
+            'NUMEMPLEADO' => $numero,
+            'FIRSTNAME'   => trim($request->input('firstName')),
+            'LASTNAME'    => trim($request->input('lastName')),
+            'MIDDLENAME'  => trim($request->input('middleName', '')),
+            'NIVEL'       => trim($request->input('nivel')),
+            'UNIDAD'      => trim($request->input('unidad')),
+            'EMAIL'       => $email,
+            'ORIGEN'      => $origen,
+            'ACTIVE'      => $request->boolean('active') ? 1 : 0,
         ];
-    }
 
-    $numeroExiste = $db->table('users')
-        ->whereRaw('UPPER(NUMEMPLEADO) = ?', [$numero])
-        ->whereRaw('UPPER(ORIGEN) = ?', [strtoupper($origen)])
-        ->where('ID_USER', '<>', $idUsuario)
-        ->exists();
+        $tipoUsuarioActual = Auth::user()->idType
+            ?? Auth::user()->idtype
+            ?? Auth::user()->IDTYPE
+            ?? null;
 
-    if ($numeroExiste) {
-        $errores['numEmpleado'] = [
-            'Ese número de empleado ya está registrado para ese origen.',
-        ];
-    }
+        if ((int) $tipoUsuarioActual === 1 && $request->filled('idType')) {
+            $datos['IDTYPE'] = $request->integer('idType');
+        }
 
-    if ($errores) {
+        if ($request->filled('nuevaPassword')) {
+            $datos['PASSWORD'] = Hash::make($request->input('nuevaPassword'));
+            $datos['MUST_CHANGE_PASSWORD'] = '1';
+        }
+
+        $db->table('users')
+            ->where('ID_USER', $idUsuario)
+            ->update($datos);
+
         return response()->json([
-            'message' => 'No se pudo actualizar el usuario.',
-            'errors' => $errores,
-        ], 422);
+            'message' => 'Usuario actualizado correctamente.',
+        ]);
     }
-
-    $datos = [
-        'NUMEMPLEADO' => $numero,
-        'FIRSTNAME'   => trim($request->input('firstName')),
-        'LASTNAME'    => trim($request->input('lastName')),
-        'MIDDLENAME'  => trim($request->input('middleName', '')),
-        'NIVEL'       => trim($request->input('nivel')),
-        'UNIDAD'      => trim($request->input('unidad')),
-        'EMAIL'       => $email,
-        'ORIGEN'      => $origen,
-        'ACTIVE'      => $request->boolean('active') ? 1 : 0,
-    ];
-
-    $tipoUsuarioActual = Auth::user()->idType
-        ?? Auth::user()->idtype
-        ?? Auth::user()->IDTYPE
-        ?? null;
-
-    if ((int) $tipoUsuarioActual === 1 && $request->filled('idType')) {
-        $datos['IDTYPE'] = $request->integer('idType');
-    }
-
-    if ($request->filled('nuevaPassword')) {
-        $datos['PASSWORD'] = Hash::make($request->input('nuevaPassword'));
-        $datos['MUST_CHANGE_PASSWORD'] = '1';
-    }
-
-    $db->table('users')
-        ->where('ID_USER', $idUsuario)
-        ->update($datos);
-
-    return response()->json([
-        'message' => 'Usuario actualizado correctamente.',
-    ]);
-}
     public function buscarEmpleadoParaUsuario(Request $request)
     {
         $datos = $request->validate([
@@ -865,5 +864,249 @@ class AdminController extends Controller
             ];
 
         return array_merge($comunes, $especificas);
+    }
+    public function obtenerTarjetas()
+    {
+        try {
+            $tarjetas = DB::connection('oracle_primary')
+                ->table('cards as c')
+                ->leftJoin('registers as r', 'r.IDREGISTER', '=', 'c.IDREGISTER')
+                ->leftJoin('status as s', 's.idStatus', '=', 'c.idStatus')
+                ->select([
+                    'c.idCard',
+                    'c.IDREGISTER',
+                    'c.folioCard',
+                    'c.cuenta',
+                    'c.idStatus',
+                    's.status as status',
+                    'c.observaciones',
+                    'r.NUMEMPLEADO',
+                    'r.NOMBRECOMPLETO',
+                    'r.PENSION',
+                ])
+                ->orderByDesc('c.idCard')
+                ->get();
+
+            return response()->json([
+                'status' => true,
+                'data' => $tarjetas,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error al consultar tarjetas: ' . $e->getMessage());
+
+            return response()->json([
+                'status' => false,
+                'message' => 'Error al consultar tarjetas.',
+            ], 500);
+        }
+    }
+
+    public function obtenerEstatusTarjetas()
+    {
+        try {
+            $estatus = DB::connection('oracle_primary')
+                ->table('status')
+                ->select(['idStatus', 'status'])
+                ->orderBy('idStatus')
+                ->get();
+
+            return response()->json([
+                'status' => true,
+                'data' => $estatus,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error al consultar estatus de tarjetas: ' . $e->getMessage());
+
+            return response()->json([
+                'status' => false,
+                'message' => 'Error al consultar los estatus.',
+            ], 500);
+        }
+    }
+
+    public function crearTarjetaReemplazo(Request $request)
+    {
+$validated = $request->validate([
+    'IDREGISTER' => 'required|integer',
+    'folioCard' => 'required|string|max:255',
+    'cuenta' => 'required|string|max:255',
+    'idStatus' => 'required|integer',
+    'observaciones' => 'nullable|string',
+]);
+
+        try {
+            $registroExiste = DB::connection('oracle_primary')
+                ->table('registers')
+                ->where('IDREGISTER', $validated['IDREGISTER'])
+                ->exists();
+
+            $estatusExiste = DB::connection('oracle_primary')
+                ->table('status')
+                ->where('idStatus', $validated['idStatus'])
+                ->exists();
+
+            if (!$registroExiste) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'No se encontró el empleado seleccionado.',
+                ], 404);
+            }
+
+            if (!$estatusExiste) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'El estatus seleccionado no existe.',
+                ], 422);
+            }
+
+$tarjeta = new Card();
+$tarjeta->IDREGISTER = $validated['IDREGISTER'];
+$tarjeta->folioCard = $validated['folioCard'];
+$tarjeta->cuenta = $validated['cuenta'];
+$tarjeta->idStatus = $validated['idStatus'];
+$tarjeta->observaciones = $validated['observaciones'] ?? null;
+$tarjeta->save();
+
+            return response()->json([
+                'status' => true,
+                'message' => 'Tarjeta de reemplazo registrada correctamente.',
+                'data' => $tarjeta,
+            ], 201);
+        } catch (\Exception $e) {
+            Log::error('Error al registrar tarjeta de reemplazo: ' . $e->getMessage());
+
+            return response()->json([
+                'status' => false,
+                'message' => 'Error al registrar la tarjeta.',
+            ], 500);
+        }
+    }
+
+    public function actualizarEstatusTarjeta(Request $request, $idCard)
+    {
+        $validated = $request->validate([
+            'idStatus' => 'required|integer',
+        ]);
+
+        try {
+            $estatusExiste = DB::connection('oracle_primary')
+                ->table('status')
+                ->where('idStatus', $validated['idStatus'])
+                ->exists();
+
+            if (!$estatusExiste) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'El estatus seleccionado no existe.',
+                ], 422);
+            }
+
+            $tarjeta = Card::findOrFail($idCard);
+            $tarjeta->idStatus = $validated['idStatus'];
+            $tarjeta->save();
+
+            return response()->json([
+                'status' => true,
+                'message' => 'Estatus de tarjeta actualizado correctamente.',
+            ]);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json([
+                'status' => false,
+                'message' => 'No se encontró la tarjeta.',
+            ], 404);
+        } catch (\Exception $e) {
+            Log::error('Error al actualizar estatus de tarjeta: ' . $e->getMessage());
+
+            return response()->json([
+                'status' => false,
+                'message' => 'Error al actualizar el estatus.',
+            ], 500);
+        }
+    }
+    public function obtenerDetalleModuloTarjetas($idRegister)
+    {
+        try {
+            $conexion = DB::connection('oracle_primary');
+
+            $empleado = $conexion
+                ->table('registers')
+                ->select([
+                    'IDREGISTER',
+                    'NOMBRECOMPLETO',
+                    'NUMEMPLEADO',
+                    'NOMEMPLEADO',
+                    'APPEMPLEADO',
+                    'APMEMPLEADO',
+                    'UR',
+                    'RFC',
+                    'CURP',
+                    'NSS',
+                    'NIVEL',
+                    'PUESTO',
+                    'UBICACION',
+                    'IDENLACE',
+                    'CLAVE',
+                    'CUENTAINICIAL',
+                    'MODALIDAD',
+                    'IDSTATUS',
+                    'ORIGEN',
+                    'PENSION',
+                    'CREATED_AT',
+                    'UPDATED_AT',
+                ])
+                ->where('IDREGISTER', $idRegister)
+                ->first();
+
+            if (!$empleado) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'No se encontró el empleado.',
+                ], 404);
+            }
+
+            $tarjetas = $conexion
+                ->table('cards as c')
+                ->leftJoin('status as s', 's.idStatus', '=', 'c.idStatus')
+                ->select([
+                    'c.idCard',
+                    'c.IDREGISTER',
+                    'c.folioCard',
+                    'c.cuenta',
+                    'c.idStatus',
+                    's.status as status',
+                    'c.observaciones',
+                    'c.CREATED_AT',
+                    'c.UPDATED_AT',
+                ])
+                ->where('c.IDREGISTER', $idRegister)
+                ->orderByDesc('c.idCard')
+                ->get();
+
+            $estatus = $conexion
+                ->table('status')
+                ->select(['idStatus', 'status'])
+                ->orderBy('idStatus')
+                ->get();
+
+            return response()->json([
+                'status' => true,
+                'data' => [
+                    'empleado' => $empleado,
+                    'tarjetas' => $tarjetas,
+                    'estatusDisponibles' => $estatus,
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Error al consultar módulo de tarjetas', [
+                'idRegister' => $idRegister,
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'status' => false,
+                'message' => 'Error al consultar la información del empleado y sus tarjetas.',
+            ], 500);
+        }
     }
 }

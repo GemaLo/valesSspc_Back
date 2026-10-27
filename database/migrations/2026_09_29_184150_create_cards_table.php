@@ -11,8 +11,13 @@ return new class extends Migration
         Schema::create('cards', function (Blueprint $table) {
             $table->id('idCard');
             $table->string('cuenta');
-            $table->unsignedBigInteger('id_user')->nullable();
-            $table->foreign('id_user')->references('id_user')->on('users');
+            $table->string('folioCard');
+            $table->unsignedBigInteger('idRegister')->nullable();
+            $table->foreign('idRegister')->references('idRegister')->on('registers');
+            $table->unsignedBigInteger('idStatus')->nullable();
+            $table->foreign('idStatus')->references('idStatus')->on('status');
+            $table->longtext('observaciones')->nullable();
+
             $table->timestamps();
         });
     }

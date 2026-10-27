@@ -10,5 +10,11 @@ class Card extends Model
     protected $table = 'cards';
 
     protected $primaryKey = 'idCard';
-    protected $fillable = ['folioCard', 'cuenta', 'id_user'];
+    protected $fillable = [
+        'IDREGISTER',
+        'folioCard',
+        'cuenta',
+        'idStatus',
+        'observaciones',
+    ];
 }

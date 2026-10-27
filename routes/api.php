@@ -26,7 +26,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/gestor/vales/actualizar-estatus', [AdminController::class, 'actualizarEstatusVale']);
     Route::post('/gestor/vales/cargar-tarjetas', [AdminController::class, 'cargarTarjetas']);
     Route::get('/gestor/vales/descargar-formatos/{idRegister}', [AdminController::class, 'descargarFormatos']);
-    Route::get('/gestor/vales/descargar-formatos/{idRegister}',[AdminController::class, 'descargarFormatos']);
+    // Route::get('/gestor/vales/descargar-formatos/{idRegister}',[AdminController::class, 'descargarFormatos']);
     Route::get('/admin/users', [AdminController::class, 'listarUsuarios']);
     Route::get('/admin/users/empleado', [AdminController::class, 'buscarEmpleadoParaUsuario']);
     Route::post('/admin/users', [AdminController::class, 'crearUsuario']);
@@ -34,4 +34,28 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/admin/reportes/anios', [AdminController::class, 'obtenerAniosReporte']);
     Route::get('/admin/reportes/registros', [AdminController::class, 'obtenerReporteRegistros']);
+
+    Route::get(
+    '/gestor/tarjetas',
+    [AdminController::class, 'obtenerTarjetas']
+);
+
+Route::get(
+    '/gestor/tarjetas/estatus',
+    [AdminController::class, 'obtenerEstatusTarjetas']
+);
+
+Route::post(
+    '/gestor/tarjetas',
+    [AdminController::class, 'crearTarjetaReemplazo']
+);
+
+Route::patch(
+    '/gestor/tarjetas/{idCard}/estatus',
+    [AdminController::class, 'actualizarEstatusTarjeta']
+);
+Route::get(
+    '/gestor/tarjetas/empleado/{idRegister}',
+    [AdminController::class, 'obtenerDetalleModuloTarjetas']
+);
 });
