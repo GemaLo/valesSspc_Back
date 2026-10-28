@@ -402,7 +402,7 @@ class AdminController extends Controller
         return $consulta->first();
     }
 
-    public function saveUser(Request $request)
+    public function crearUsuario(Request $request)
     {
         $request->validate([
             'numEmpleado' => ['required', 'string', 'max:20'],
@@ -427,9 +427,10 @@ class AdminController extends Controller
             ->exists();
 
         if ($emailExiste) {
-            return back()
-                ->withErrors(['email' => 'Ese correo ya está registrado.'])
-                ->withInput();
+            return response()->json([
+                'status' => false,
+                'message' => 'Ese correo ya está registrado.',
+            ], 409);
         }
 
         $numeroExiste = DB::connection('oracle_primary')
@@ -439,11 +440,10 @@ class AdminController extends Controller
             ->exists();
 
         if ($numeroExiste) {
-            return back()
-                ->withErrors([
-                    'numEmpleado' => 'Ese número de empleado ya está registrado para ese origen.',
-                ])
-                ->withInput();
+            return response()->json([
+                'status' => false,
+                'message' => 'Ese número de empleado ya está registrado para ese origen.',
+            ], 409);
         }
 
         $tipoUsuarioActual = Auth::user()->idType
@@ -454,7 +454,6 @@ class AdminController extends Controller
         $idType = (int) $tipoUsuarioActual === 1
             ? $request->integer('idtype')
             : 3;
-
         User::create([
             'numEmpleado' => $request->input('numEmpleado'),
             'firstName' => trim($request->input('nomUsuario')),
@@ -467,9 +466,13 @@ class AdminController extends Controller
             'origen' => $origen,
             'idType' => $idType,
             'active' => 0,
+            'must_change_password' => 1,
         ]);
 
-        return back()->with('success', 'El usuario se creó correctamente.');
+        return response()->json([
+            'status' => true,
+            'message' => 'El usuario se creó correctamente.',
+        ], 201);
     }
 
     public function users_list_json()
@@ -926,13 +929,13 @@ class AdminController extends Controller
 
     public function crearTarjetaReemplazo(Request $request)
     {
-$validated = $request->validate([
-    'IDREGISTER' => 'required|integer',
-    'folioCard' => 'required|string|max:255',
-    'cuenta' => 'required|string|max:255',
-    'idStatus' => 'required|integer',
-    'observaciones' => 'nullable|string',
-]);
+        $validated = $request->validate([
+            'IDREGISTER' => 'required|integer',
+            'folioCard' => 'required|string|max:255',
+            'cuenta' => 'required|string|max:255',
+            'idStatus' => 'required|integer',
+            'observaciones' => 'nullable|string',
+        ]);
 
         try {
             $registroExiste = DB::connection('oracle_primary')
@@ -959,13 +962,26 @@ $validated = $request->validate([
                 ], 422);
             }
 
-$tarjeta = new Card();
-$tarjeta->IDREGISTER = $validated['IDREGISTER'];
-$tarjeta->folioCard = $validated['folioCard'];
-$tarjeta->cuenta = $validated['cuenta'];
-$tarjeta->idStatus = $validated['idStatus'];
-$tarjeta->observaciones = $validated['observaciones'] ?? null;
-$tarjeta->save();
+            $tarjeta = DB::connection('oracle_primary')->transaction(
+                function () use ($validated) {
+                    $registro = Register::on('oracle_primary')
+                        ->findOrFail($validated['IDREGISTER']);
+
+                    $tarjeta = new Card();
+                    $tarjeta->IDREGISTER = $validated['IDREGISTER'];
+                    $tarjeta->folioCard = $validated['folioCard'];
+                    $tarjeta->cuenta = $validated['cuenta'];
+                    $tarjeta->idStatus = $validated['idStatus'];
+                    $tarjeta->observaciones = $validated['observaciones'] ?? null;
+                    $tarjeta->save();
+
+                    // Actualiza la cuenta vigente del empleado.
+                    $registro->CUENTAINICIAL = $validated['cuenta'];
+                    $registro->save();
+
+                    return $tarjeta;
+                }
+            );
 
             return response()->json([
                 'status' => true,

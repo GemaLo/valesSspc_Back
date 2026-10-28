@@ -49,7 +49,7 @@ class UserSeeder extends Seeder
             'active' => '1',
             'idType' => '3',
             'origen' => 'SSPC',
-            'email' => 'hector.serralde@sspc.gob.mx', 
+            'email' => 'hector.serralde@sspc.gob.mx',
             'must_change_password' => '1',
             'password' => Hash::make('password')
         ]);
