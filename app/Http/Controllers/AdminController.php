@@ -787,10 +787,12 @@ class AdminController extends Controller
             $origen = $this->origenReporteDelUsuario();
             $columnas = $this->columnasReportePorOrigen($origen);
             $keys = array_column($columnas, 'key');
+            // ORIGEN se conserva para el filtro de la vista, sin mostrarse como columna.
+            $keys[] = 'ORIGEN';
 
             $registros = DB::connection('oracle_primary')
                 ->table('registers')
-                ->select($keys)
+                ->select(array_values(array_unique($keys)))
                 ->whereRaw('UPPER(ORIGEN) = ?', [$origen])
                 ->whereRaw('EXTRACT(YEAR FROM CREATED_AT) = ?', [(int) $datos['anio']])
                 ->orderBy('IDREGISTER', 'desc')
@@ -841,9 +843,6 @@ class AdminController extends Controller
             ['key' => 'IDREGISTER', 'label' => 'ID de registro'],
             ['key' => 'NUMEMPLEADO', 'label' => 'Número de empleado'],
             ['key' => 'NOMBRECOMPLETO', 'label' => 'Nombre completo'],
-            ['key' => 'NOMEMPLEADO', 'label' => 'Nombre(s)'],
-            ['key' => 'APPEMPLEADO', 'label' => 'Apellido paterno'],
-            ['key' => 'APMEMPLEADO', 'label' => 'Apellido materno'],
             ['key' => 'UR', 'label' => 'UR'],
             ['key' => 'RFC', 'label' => 'RFC'],
             ['key' => 'CURP', 'label' => 'CURP'],
@@ -852,9 +851,7 @@ class AdminController extends Controller
             ['key' => 'IDENLACE', 'label' => 'Enlace'],
             ['key' => 'CUENTAINICIAL', 'label' => 'Cuenta asignada'],
             ['key' => 'IDSTATUS', 'label' => 'Estatus'],
-            ['key' => 'ORIGEN', 'label' => 'Origen del registro'],
             ['key' => 'CREATED_AT', 'label' => 'Fecha de registro'],
-            ['key' => 'UPDATED_AT', 'label' => 'Última actualización'],
         ];
 
         $especificas = $origen === 'SC'
