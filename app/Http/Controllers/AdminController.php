@@ -17,54 +17,56 @@ use Yajra\DataTables\Facades\DataTables;
 class AdminController extends Controller
 {
     public function obtenerRegistrosVales(Request $request)
-    {
-        try {
-            $estatus = $request->query('estatus', 'todos');
+{
+    try {
+        $estatus = $request->query('estatus', 'todos');
 
-            $query = Register::query()
-                ->select([
-                    'IDREGISTER',
-                    'NOMBRECOMPLETO',
-                    'NUMEMPLEADO',
-                    'NOMEMPLEADO',
-                    'APPEMPLEADO',
-                    'APMEMPLEADO',
-                    'UR',
-                    'NSS',
-                    'NIVEL',
-                    'PUESTO',
-                    'UBICACION',
-                    'IDENLACE',
-                    'CLAVE',
-                    'CUENTAINICIAL',
-                    'MODALIDAD',
-                    'IDSTATUS',
-                    'ORIGEN',
-                    'PENSION',
-                    'CREATED_AT',
-                    'UPDATED_AT',
-                ])
-                ->whereYear('CREATED_AT', now()->year);
+        $query = Register::query()
+            ->select([
+                'IDREGISTER',
+                'NOMBRECOMPLETO',
+                'NUMEMPLEADO',
+                'NOMEMPLEADO',
+                'APPEMPLEADO',
+                'APMEMPLEADO',
+                'UR',
+                'NSS',
+                'NIVEL',
+                'PUESTO',
+                'UBICACION',
+                'IDENLACE',
+                'CLAVE',
+                'CUENTAINICIAL',
+                'MODALIDAD',
+                'IDSTATUS',
+                'ORIGEN',
+                'PENSION',
+                'CREATED_AT',
+                'UPDATED_AT',
+            ])
+            ->whereYear('CREATED_AT', now()->year);
 
-            if ($estatus !== 'todos' && $estatus !== null) {
-                $query->where('IDSTATUS', $estatus);
-            }
-
-            $registros = $query->orderBy('IDREGISTER', 'desc')->get();
-
-            return response()->json([
-                'status' => true,
-                'data' => $registros,
-            ]);
-        } catch (\Exception $e) {
-            Log::error('Error en obtenerRegistrosVales: ' . $e->getMessage());
-
-            return response()->json([
-                'status' => false,
-                'message' => 'Error al consultar registros: ' . $e->getMessage(),
-            ], 500);
+        if ($estatus !== 'todos' && $estatus !== null) {
+            $query->where('IDSTATUS', $estatus);
         }
+
+        $this->filtrarRegistrosPorEnlace($query);
+
+        $registros = $query->orderBy('IDREGISTER', 'desc')->get();
+
+        return response()->json([
+            'status' => true,
+            'data' => $registros,
+        ]);
+    } catch (\Exception $e) {
+        Log::error('Error en obtenerRegistrosVales: ' . $e->getMessage());
+
+        return response()->json([
+            'status' => false,
+            'message' => 'Error al consultar registros: ' . $e->getMessage(),
+        ], 500);
     }
+}
 
     public function actualizarEstatusVale(Request $request)
     {
@@ -294,7 +296,9 @@ class AdminController extends Controller
             ], 400);
         }
 
-        $empleado = Register::find($idRegister);
+        $consultaEmpleado = Register::query()->where('IDREGISTER', $idRegister);
+        $this->filtrarRegistrosPorEnlace($consultaEmpleado);
+        $empleado = $consultaEmpleado->first();
 
         if (!$empleado) {
             return response()->json([
@@ -743,9 +747,12 @@ class AdminController extends Controller
         try {
             $origen = $this->origenReporteDelUsuario();
 
-            $anios = DB::connection('oracle_primary')
+            $consultaAnios = DB::connection('oracle_primary')
                 ->table('registers')
-                ->whereRaw('UPPER(ORIGEN) = ?', [$origen])
+                ->whereRaw('UPPER(ORIGEN) = ?', [$origen]);
+            $this->filtrarRegistrosPorEnlace($consultaAnios);
+
+            $anios = $consultaAnios
                 ->whereNotNull('CREATED_AT')
                 ->selectRaw('EXTRACT(YEAR FROM CREATED_AT) AS ANIO')
                 ->distinct()
@@ -793,7 +800,9 @@ class AdminController extends Controller
             $registros = DB::connection('oracle_primary')
                 ->table('registers')
                 ->select(array_values(array_unique($keys)))
-                ->whereRaw('UPPER(ORIGEN) = ?', [$origen])
+                ->whereRaw('UPPER(ORIGEN) = ?', [$origen]);
+            $this->filtrarRegistrosPorEnlace($registros);
+            $registros = $registros
                 ->whereRaw('EXTRACT(YEAR FROM CREATED_AT) = ?', [(int) $datos['anio']])
                 ->orderBy('IDREGISTER', 'desc')
                 ->get();
@@ -817,6 +826,47 @@ class AdminController extends Controller
                 'message' => 'No fue posible consultar los registros del reporte.',
             ], 500);
         }
+    }
+
+    /**
+     * Limita las consultas al enlace autenticado cuando la cuenta es tipo Enlace (idType 3).
+     */
+    private function filtrarRegistrosPorEnlace($query, string $columna = 'IDENLACE'): void
+    {
+        $usuario = Auth::user();
+        $tipoUsuario = (int) (
+            $usuario->idType
+            ?? $usuario->idtype
+            ?? $usuario->IDTYPE
+            ?? 0
+        );
+
+        if ($tipoUsuario !== 3) {
+            return;
+        }
+
+        $partesNombre = array_filter(array_map('trim', [
+            $usuario->firstName ?? $usuario->firstname ?? $usuario->FIRSTNAME ?? '',
+            $usuario->lastName ?? $usuario->lastname ?? $usuario->LASTNAME ?? '',
+            $usuario->middleName ?? $usuario->middlename ?? $usuario->MIDDLENAME ?? '',
+        ]), fn($parte) => $parte !== '');
+        $nombreCompleto = preg_replace('/\s+/', ' ', implode(' ', $partesNombre));
+
+        if ($nombreCompleto === '') {
+            $query->whereRaw('1 = 0');
+            return;
+        }
+
+        $nombreNormalizado = strtr(mb_strtoupper($nombreCompleto, 'UTF-8'), [
+            'Á' => 'A', 'É' => 'E', 'Í' => 'I', 'Ó' => 'O', 'Ú' => 'U',
+            'Ü' => 'U', 'Ñ' => 'N',
+        ]);
+        $nombreBuscado = '%' . $nombreNormalizado . '%';
+
+        $query->whereRaw(
+            "TRANSLATE(UPPER(TRIM(REGEXP_REPLACE({$columna}, '[[:space:]]+', ' '))), 'ÁÉÍÓÚÜÑ', 'AEIOUUN') LIKE ?",
+            [$nombreBuscado]
+        );
     }
 
     private function origenReporteDelUsuario(): string
@@ -868,7 +918,7 @@ class AdminController extends Controller
     public function obtenerTarjetas()
     {
         try {
-            $tarjetas = DB::connection('oracle_primary')
+            $consultaTarjetas = DB::connection('oracle_primary')
                 ->table('cards as c')
                 ->leftJoin('registers as r', 'r.IDREGISTER', '=', 'c.IDREGISTER')
                 ->leftJoin('status as s', 's.idStatus', '=', 'c.idStatus')
@@ -883,7 +933,9 @@ class AdminController extends Controller
                     'r.NUMEMPLEADO',
                     'r.NOMBRECOMPLETO',
                     'r.PENSION',
-                ])
+                ]);
+            $this->filtrarRegistrosPorEnlace($consultaTarjetas, 'r.IDENLACE');
+            $tarjetas = $consultaTarjetas
                 ->orderByDesc('c.idCard')
                 ->get();
 
@@ -1041,7 +1093,7 @@ class AdminController extends Controller
         try {
             $conexion = DB::connection('oracle_primary');
 
-            $empleado = $conexion
+            $empleadoQuery = $conexion
                 ->table('registers')
                 ->select([
                     'IDREGISTER',
@@ -1067,8 +1119,9 @@ class AdminController extends Controller
                     'CREATED_AT',
                     'UPDATED_AT',
                 ])
-                ->where('IDREGISTER', $idRegister)
-                ->first();
+                ->where('IDREGISTER', $idRegister);
+            $this->filtrarRegistrosPorEnlace($empleadoQuery);
+            $empleado = $empleadoQuery->first();
 
             if (!$empleado) {
                 return response()->json([
