@@ -273,7 +273,7 @@ class AdminController extends Controller
 
             return response()->json([
                 'status' => true,
-                'message' => "Carga exitosa. Cuentas actualizadas: {$actualizados}. No encontrados en BD: {$noEncontrados}.",
+                'message' => "Carga exitosa. Cuentas actualizadas: {$actualizados}. No encontrados en registros: {$noEncontrados}.",
                 'actualizados' => $actualizados,
                 'noEncontrados' => $noEncontrados,
             ]);
@@ -745,11 +745,15 @@ class AdminController extends Controller
     public function obtenerAniosReporte()
     {
         try {
-            $origen = $this->origenReporteDelUsuario();
+            $usuario = Auth::user();
+            $tipoUsuario = (int) ($usuario->idType ?? $usuario->idtype ?? $usuario->IDTYPE ?? 0);
+            $esAdministrador = $tipoUsuario === 1;
+            $origen = $esAdministrador ? 'TODOS' : $this->origenReporteDelUsuario();
 
-            $consultaAnios = DB::connection('oracle_primary')
-                ->table('registers')
-                ->whereRaw('UPPER(ORIGEN) = ?', [$origen]);
+            $consultaAnios = DB::connection('oracle_primary')->table('registers');
+            if (!$esAdministrador) {
+                $consultaAnios->whereRaw('UPPER(ORIGEN) = ?', [$origen]);
+            }
             $this->filtrarRegistrosPorEnlace($consultaAnios);
 
             $anios = $consultaAnios
@@ -791,7 +795,10 @@ class AdminController extends Controller
         ]);
 
         try {
-            $origen = $this->origenReporteDelUsuario();
+            $usuario = Auth::user();
+            $tipoUsuario = (int) ($usuario->idType ?? $usuario->idtype ?? $usuario->IDTYPE ?? 0);
+            $esAdministrador = $tipoUsuario === 1;
+            $origen = $esAdministrador ? 'TODOS' : $this->origenReporteDelUsuario();
             $columnas = $this->columnasReportePorOrigen($origen);
             $keys = array_column($columnas, 'key');
             // ORIGEN se conserva para el filtro de la vista, sin mostrarse como columna.
@@ -799,8 +806,10 @@ class AdminController extends Controller
 
             $registros = DB::connection('oracle_primary')
                 ->table('registers')
-                ->select(array_values(array_unique($keys)))
-                ->whereRaw('UPPER(ORIGEN) = ?', [$origen]);
+                ->select(array_values(array_unique($keys)));
+            if (!$esAdministrador) {
+                $registros->whereRaw('UPPER(ORIGEN) = ?', [$origen]);
+            }
             $this->filtrarRegistrosPorEnlace($registros);
             $registros = $registros
                 ->whereRaw('EXTRACT(YEAR FROM CREATED_AT) = ?', [(int) $datos['anio']])
@@ -903,6 +912,19 @@ class AdminController extends Controller
             ['key' => 'IDSTATUS', 'label' => 'Estatus'],
             ['key' => 'CREATED_AT', 'label' => 'Fecha de registro'],
         ];
+
+        if ($origen === 'TODOS') {
+            $origenColumna = [['key' => 'ORIGEN', 'label' => 'Origen del registro']];
+            $columnasEspecificas = [
+                ['key' => 'PENSION', 'label' => 'Pensión alimenticia'],
+                ['key' => 'PUESTO', 'label' => 'Puesto'],
+                ['key' => 'UBICACION', 'label' => 'Ubicación física'],
+                ['key' => 'CLAVE', 'label' => 'Clave'],
+                ['key' => 'MODALIDAD', 'label' => 'Modalidad'],
+            ];
+
+            return array_merge($comunes, $origenColumna, $columnasEspecificas);
+        }
 
         $especificas = $origen === 'SC'
             ? [['key' => 'PENSION', 'label' => 'Pensión alimenticia']]
@@ -1024,7 +1046,6 @@ class AdminController extends Controller
                     $tarjeta->observaciones = $validated['observaciones'] ?? null;
                     $tarjeta->save();
 
-                    // Actualiza la cuenta vigente del empleado.
                     $registro->CUENTAINICIAL = $validated['cuenta'];
                     $registro->save();
 
@@ -1116,6 +1137,7 @@ class AdminController extends Controller
                     'IDSTATUS',
                     'ORIGEN',
                     'PENSION',
+                    'IMPORTE',
                     'CREATED_AT',
                     'UPDATED_AT',
                 ])

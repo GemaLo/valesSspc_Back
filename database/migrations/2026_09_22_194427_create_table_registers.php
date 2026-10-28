@@ -30,6 +30,7 @@ return new class extends Migration
             $table->unsignedBigInteger('IDSTATUS');
             $table->string('ORIGEN')->nullable();
             $table->string('PENSION')->nullable();
+            $table->string('IMPORTE')->nullable();
 
             $table->foreign('IDSTATUS')
                 ->references('IDSTATUS')

@@ -31,6 +31,7 @@ class Register extends Model
         'MODALIDAD',
         'IDSTATUS',
         'ORIGEN',
-        'PENSION'
+        'PENSION',
+        'IMPORTE'
     ];
 }
