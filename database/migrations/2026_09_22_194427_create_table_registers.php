@@ -26,6 +26,7 @@ return new class extends Migration
             $table->string('IDENLACE')->nullable();
             $table->string('CLAVE')->nullable();
             $table->string('CUENTAINICIAL')->nullable();
+            $table->longtext('OBSERVACIONINICIAL')->nullable();
             $table->string('MODALIDAD')->nullable();
             $table->unsignedBigInteger('IDSTATUS');
             $table->string('ORIGEN')->nullable();

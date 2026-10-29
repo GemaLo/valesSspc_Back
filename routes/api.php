@@ -43,4 +43,5 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::patch('/gestor/tarjetas/{idCard}/estatus',[AdminController::class, 'actualizarEstatusTarjeta']);
     Route::get('/gestor/tarjetas/empleado/{idRegister}',[AdminController::class, 'obtenerDetalleModuloTarjetas']);
     Route::post('gestor/vales/cargar-pensiones', [AdminController::class, 'cargarPensiones']);
+    Route::post('/gestor/vales/observacion', [AdminController::class, 'guardarObservacionInicial']);
 });

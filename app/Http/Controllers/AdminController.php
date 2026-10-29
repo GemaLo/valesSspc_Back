@@ -1325,6 +1325,8 @@ class AdminController extends Controller
                     'ORIGEN',
                     'PENSION',
                     'IMPORTE',
+                    'OBSERVACIONINICIAL',
+
                     'CREATED_AT',
                     'UPDATED_AT',
                 ])
@@ -1389,4 +1391,44 @@ class AdminController extends Controller
             ], 500);
         }
     }
+    public function guardarObservacionInicial(Request $request)
+{
+    // Validamos que llegue el identificador del registro y el texto
+    $request->validate([
+        'idRegister' => ['required'],
+        'observacioninicial' => ['nullable', 'string', 'max:1000'],
+    ]);
+
+    $idRegister = $request->input('idRegister');
+    $observacion = $request->input('observacioninicial');
+
+    try {
+        // Actualizamos directamente la columna en la conexión de Oracle
+        $afectados = DB::connection('oracle_primary')
+            ->table('registers')
+            ->where('IDREGISTER', $idRegister)
+            ->update([
+                'OBSERVACIONINICIAL' => $observacion,
+            ]);
+
+        if ($afectados === 0) {
+            return response()->json([
+                'status' => false,
+                'message' => 'No se encontró el registro especificado.',
+            ], 404);
+        }
+
+        return response()->json([
+            'status' => true,
+            'message' => 'Observación actualizada correctamente.',
+        ]);
+    } catch (\Throwable $e) {
+        Log::error('Error al actualizar la observación inicial: ' . $e->getMessage());
+
+        return response()->json([
+            'status' => false,
+            'message' => 'Ocurrió un error al guardar la observación.',
+        ], 500);
+    }
+}
 }

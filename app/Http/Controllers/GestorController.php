@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use App\Models\Register;
 use App\Models\Pension;
+use PhpOffice\PhpSpreadsheet\IOFactory;
 
 class GestorController extends Controller
 {
