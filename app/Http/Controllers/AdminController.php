@@ -41,6 +41,7 @@ class AdminController extends Controller
                     'IDSTATUS',
                     'ORIGEN',
                     'PENSION',
+                    'IMPORTE',
                     'CREATED_AT',
                     'UPDATED_AT',
                 ])
@@ -174,118 +175,131 @@ class AdminController extends Controller
             ], 500);
         }
     }
+    
     public function cargarTarjetas(Request $request)
-    {
-        $request->validate([
-            'archivo' => 'required|file|mimes:csv,txt,xlsx,xls|max:5120',
-        ]);
+{
+    $request->validate([
+        'archivo' => 'required|file|mimes:csv,txt,xlsx,xls|max:5120',
+        'importe' => ['required', 'numeric', 'min:0.01'],
+    ]);
 
-        $file = $request->file('archivo');
-        $extension = strtolower($file->getClientOriginalExtension());
-        $filas = [];
+    $importe = $request->input('importe');
+    $file = $request->file('archivo');
+    $extension = strtolower($file->getClientOriginalExtension());
+    $filas = [];
 
-        try {
-            if (in_array($extension, ['csv', 'txt'], true)) {
-                $path = $file->getRealPath();
-                $contenido = file_get_contents($path);
-                $delimitador = substr_count($contenido, ';') > substr_count($contenido, ',')
-                    ? ';'
-                    : ',';
+    try {
+        if (in_array($extension, ['csv', 'txt'], true)) {
+            $path = $file->getRealPath();
+            $contenido = file_get_contents($path);
+            $delimitador = substr_count($contenido, ';') > substr_count($contenido, ',')
+                ? ';'
+                : ',';
 
-                $handle = fopen($path, 'r');
+            $handle = fopen($path, 'r');
 
-                if ($handle === false) {
-                    throw new \RuntimeException('No se pudo leer el archivo.');
-                }
-
-                $numeroFila = 0;
-
-                while (($data = fgetcsv($handle, 0, $delimitador)) !== false) {
-                    if ($numeroFila++ === 0) {
-                        continue;
-                    }
-
-                    $filas[] = [
-                        'cuenta' => isset($data[1]) ? trim((string) $data[1]) : null,
-                        'rfc' => isset($data[3]) ? strtoupper(trim((string) $data[3])) : null,
-                        'curp' => isset($data[4]) ? strtoupper(trim((string) $data[4])) : null,
-                    ];
-                }
-
-                fclose($handle);
-            } else {
-                $spreadsheet = IOFactory::load($file->getRealPath());
-                $hoja = $spreadsheet->getActiveSheet();
-
-                foreach ($hoja->toArray(null, true, true, false) as $indice => $row) {
-                    if ($indice === 0) {
-                        continue;
-                    }
-
-                    $filas[] = [
-                        'cuenta' => isset($row[1]) ? trim((string) $row[1]) : null,
-                        'rfc' => isset($row[3]) ? strtoupper(trim((string) $row[3])) : null,
-                        'curp' => isset($row[4]) ? strtoupper(trim((string) $row[4])) : null,
-                    ];
-                }
+            if ($handle === false) {
+                throw new \RuntimeException('No se pudo leer el archivo.');
             }
 
-            $actualizados = 0;
-            $noEncontrados = 0;
+            $numeroFila = 0;
 
-            DB::connection('oracle_primary')->transaction(function () use (
-                $filas,
-                &$actualizados,
-                &$noEncontrados
-            ) {
-                foreach ($filas as $fila) {
-                    $cuenta = $fila['cuenta'];
-                    $rfc = $fila['rfc'];
-                    $curp = $fila['curp'];
-
-                    if (!$cuenta || (!$rfc && !$curp)) {
-                        continue;
-                    }
-
-                    $consulta = DB::connection('oracle_primary')
-                        ->table('registers')
-                        ->where(function ($query) use ($rfc, $curp) {
-                            if ($rfc) {
-                                $query->orWhereRaw('UPPER(RFC) = ?', [$rfc]);
-                            }
-
-                            if ($curp) {
-                                $query->orWhereRaw('UPPER(CURP) = ?', [$curp]);
-                            }
-                        });
-
-                    $afectados = $consulta->update([
-                        'CUENTAINICIAL' => $cuenta,
-                    ]);
-
-                    if ($afectados > 0) {
-                        $actualizados++;
-                    } else {
-                        $noEncontrados++;
-                    }
+            while (($data = fgetcsv($handle, 0, $delimitador)) !== false) {
+                if ($numeroFila++ === 0) {
+                    continue;
                 }
-            });
 
-            return response()->json([
-                'status' => true,
-                'message' => "Carga exitosa. Cuentas actualizadas: {$actualizados}. No encontrados en registros: {$noEncontrados}.",
-                'actualizados' => $actualizados,
-                'noEncontrados' => $noEncontrados,
-            ]);
-        } catch (\Throwable $e) {
-            Log::error('Error al actualizar tarjetas en Oracle: ' . $e->getMessage());
+                $filas[] = [
+                    'cuenta' => isset($data[1]) ? trim((string) $data[1]) : null,
+                    'rfc' => isset($data[3]) ? strtoupper(trim((string) $data[3])) : null,
+                    'curp' => isset($data[4]) ? strtoupper(trim((string) $data[4])) : null,
+                ];
+            }
 
-            return response()->json([
-                'status' => false,
-                'message' => 'Error al procesar el archivo: ' . $e->getMessage(),
-            ], 500);
+            fclose($handle);
+        } else {
+            $spreadsheet = IOFactory::load($file->getRealPath());
+            $hoja = $spreadsheet->getActiveSheet();
+
+            foreach ($hoja->toArray(null, true, true, false) as $indice => $row) {
+                if ($indice === 0) {
+                    continue;
+                }
+
+                $filas[] = [
+                    'cuenta' => isset($row[1]) ? trim((string) $row[1]) : null,
+                    'rfc' => isset($row[3]) ? strtoupper(trim((string) $row[3])) : null,
+                    'curp' => isset($row[4]) ? strtoupper(trim((string) $row[4])) : null,
+                ];
+            }
         }
+
+        $actualizados = 0;
+        $noEncontrados = 0;
+
+        DB::connection('oracle_primary')->transaction(function () use (
+            $filas,
+            $importe,
+            &$actualizados,
+            &$noEncontrados
+        ) {
+            foreach ($filas as $fila) {
+                $cuenta = $fila['cuenta'];
+                $rfc = $fila['rfc'];
+                $curp = $fila['curp'];
+
+                // Solo omitimos la fila si no tiene ni RFC ni CURP para identificar al empleado
+                if (!$rfc && !$curp) {
+                    continue;
+                }
+
+                $consulta = DB::connection('oracle_primary')
+                    ->table('registers')
+                    ->where(function ($query) use ($rfc, $curp) {
+                        if ($rfc) {
+                            $query->orWhereRaw('UPPER(RFC) = ?', [$rfc]);
+                        }
+
+                        if ($curp) {
+                            $query->orWhereRaw('UPPER(CURP) = ?', [$curp]);
+                        }
+                    });
+
+                // Construimos los datos a actualizar dinámicamente
+                $datosAActualizar = [
+                    'IMPORTE' => $importe,
+                ];
+
+                // Si el archivo trae una cuenta válida, la actualizamos también
+                if (!empty($cuenta)) {
+                    $datosAActualizar['CUENTAINICIAL'] = $cuenta;
+                }
+
+                $afectados = $consulta->update($datosAActualizar);
+
+                if ($afectados > 0) {
+                    $actualizados++;
+                } else {
+                    $noEncontrados++;
+                }
+            }
+        });
+
+        return response()->json([
+            'status' => true,
+            'message' => "Carga exitosa. Registros actualizados: {$actualizados}. No encontrados en registros: {$noEncontrados}.",
+            'actualizados' => $actualizados,
+            'noEncontrados' => $noEncontrados,
+        ]);
+    } catch (\Throwable $e) {
+        Log::error('Error al actualizar tarjetas e importe en Oracle: ' . $e->getMessage());
+
+        return response()->json([
+            'status' => false,
+            'message' => 'Error al procesar el archivo: ' . $e->getMessage(),
+        ], 500);
     }
+}
 
     public function cargarPensiones(Request $request)
     {

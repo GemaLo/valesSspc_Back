@@ -189,6 +189,13 @@
     $cargo          = $empleado->PUESTO ?? $empleado->cargo ?? '-';
     $unidad         = $empleado->UR ?? $empleado->unidad ?? '-';
     $rfc            = $empleado->RFC ?? $empleado->rfc ?? '-';
+    
+    // Procesamiento y formato de pesos para el importe
+    $rawImporte     = $empleado->IMPORTE ?? $empleado->importe ?? null;
+    $importe        = ($rawImporte !== null && is_numeric($rawImporte)) 
+        ? '$' . number_format((float)$rawImporte, 2, '.', ',') 
+        : (!empty($rawImporte) ? $rawImporte : '-');
+
     $telefono       = $empleado->TELEFONO ?? $empleado->telefono ?? '';
     $correo         = $empleado->CORREO ?? $empleado->correo ?? '';
     $fechaActual    = date('d/m/Y');
@@ -206,7 +213,6 @@
         <tr>
             <td>
                 <div class="institution-title">
-                    
                     COORDINACIÓN DE ADMINISTRACIÓN Y FINANZAS<br>
                     DIRECCIÓN GENERAL DE RECURSOS HUMANOS
                 </div>
@@ -249,7 +255,7 @@
             <td class="text-center bold font-mono" style="height: 30px;">{{ $numeroEmpleado }}</td>
             <td class="text-center bold">{{ $cargo }}</td>
             <td class="text-center bold font-mono">{{ $rfc }}</td>
-            <td class="text-center bold font-mono">$14,900.00</td>
+            <td class="text-center bold font-mono">{{ $importe }}</td>
         </tr>
         <tr>
             <td colspan="4" class="bg-label">ADSCRIPCIÓN</td>
@@ -355,7 +361,7 @@
             <td class="text-center bold font-mono" style="height: 30px;">{{ $numeroEmpleado }}</td>
             <td class="text-center bold">{{ $cargo }}</td>
             <td class="text-center bold font-mono">{{ $rfc }}</td>
-            <td class="text-center bold font-mono">$14,900.00</td>
+            <td class="text-center bold font-mono">{{ $importe }}</td>
         </tr>
         <tr>
             <td colspan="4" class="bg-label">ADSCRIPCIÓN</td>
@@ -463,7 +469,7 @@
             <td class="text-center bold font-mono" style="height: 30px;">{{ $numeroEmpleado }}</td>
             <td class="text-center bold">{{ $cargo }}</td>
             <td class="text-center bold font-mono">{{ $rfc }}</td>
-            <td class="text-center bold font-mono">$14,900.00</td>
+            <td class="text-center bold font-mono">{{ $importe }}</td>
         </tr>
         <tr>
             <td colspan="4" class="bg-label">ADSCRIPCIÓN</td>
