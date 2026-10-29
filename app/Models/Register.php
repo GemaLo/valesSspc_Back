@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+
 class Register extends Model
 {
     protected $connection = 'oracle_primary';
@@ -15,8 +16,10 @@ class Register extends Model
 
     public function pensionados(): HasMany
     {
-        return $this->hasMany(Pension::class, 'NUMEMPLEADO', 'numempleado');
+        // Corregido: Llave foránea y local en mayúsculas para Oracle
+        return $this->hasMany(Pension::class, 'NUMEMPLEADO', 'NUMEMPLEADO');
     }
+
     protected $fillable = [
         'NOMBRECOMPLETO',
         'NUMEMPLEADO',
@@ -41,7 +44,3 @@ class Register extends Model
         'OBSERVACIONINICIAL'
     ];
 }
-
-
-
-

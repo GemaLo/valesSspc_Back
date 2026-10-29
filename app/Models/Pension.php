@@ -9,17 +9,20 @@ class Pension extends Model
 {
     protected $primaryKey = 'idPension';
     protected $connection = 'oracle_primary';
-
     protected $table = 'pensiones';
+
     public function empleado(): BelongsTo
     {
-        return $this->belongsTo(Register::class, 'numempleado', 'NUMEMPLEADO');
+        return $this->belongsTo(Register::class, 'NUMEMPLEADO', 'NUMEMPLEADO');
     }
-    protected $fillable = ['numEmpleado', 'nomEmpleado', 'nombrePensionado', 'curp', 'rfc', 'cuenta', 'porcentaje'];
+
+    protected $fillable = [
+        'NUMEMPLEADO',
+        'nomEmpleado',
+        'nombrePensionado',
+        'curp',
+        'rfc',
+        'cuenta',
+        'porcentaje'
+    ];
 }
-
-
-
-
-
-

@@ -177,129 +177,126 @@ class AdminController extends Controller
     }
     
     public function cargarTarjetas(Request $request)
-{
-    $request->validate([
-        'archivo' => 'required|file|mimes:csv,txt,xlsx,xls|max:5120',
-        'importe' => ['required', 'numeric', 'min:0.01'],
-    ]);
-
-    $importe = $request->input('importe');
-    $file = $request->file('archivo');
-    $extension = strtolower($file->getClientOriginalExtension());
-    $filas = [];
-
-    try {
-        if (in_array($extension, ['csv', 'txt'], true)) {
-            $path = $file->getRealPath();
-            $contenido = file_get_contents($path);
-            $delimitador = substr_count($contenido, ';') > substr_count($contenido, ',')
-                ? ';'
-                : ',';
-
-            $handle = fopen($path, 'r');
-
-            if ($handle === false) {
-                throw new \RuntimeException('No se pudo leer el archivo.');
-            }
-
-            $numeroFila = 0;
-
-            while (($data = fgetcsv($handle, 0, $delimitador)) !== false) {
-                if ($numeroFila++ === 0) {
-                    continue;
-                }
-
-                $filas[] = [
-                    'cuenta' => isset($data[1]) ? trim((string) $data[1]) : null,
-                    'rfc' => isset($data[3]) ? strtoupper(trim((string) $data[3])) : null,
-                    'curp' => isset($data[4]) ? strtoupper(trim((string) $data[4])) : null,
-                ];
-            }
-
-            fclose($handle);
-        } else {
-            $spreadsheet = IOFactory::load($file->getRealPath());
-            $hoja = $spreadsheet->getActiveSheet();
-
-            foreach ($hoja->toArray(null, true, true, false) as $indice => $row) {
-                if ($indice === 0) {
-                    continue;
-                }
-
-                $filas[] = [
-                    'cuenta' => isset($row[1]) ? trim((string) $row[1]) : null,
-                    'rfc' => isset($row[3]) ? strtoupper(trim((string) $row[3])) : null,
-                    'curp' => isset($row[4]) ? strtoupper(trim((string) $row[4])) : null,
-                ];
-            }
-        }
-
-        $actualizados = 0;
-        $noEncontrados = 0;
-
-        DB::connection('oracle_primary')->transaction(function () use (
-            $filas,
-            $importe,
-            &$actualizados,
-            &$noEncontrados
-        ) {
-            foreach ($filas as $fila) {
-                $cuenta = $fila['cuenta'];
-                $rfc = $fila['rfc'];
-                $curp = $fila['curp'];
-
-                // Solo omitimos la fila si no tiene ni RFC ni CURP para identificar al empleado
-                if (!$rfc && !$curp) {
-                    continue;
-                }
-
-                $consulta = DB::connection('oracle_primary')
-                    ->table('registers')
-                    ->where(function ($query) use ($rfc, $curp) {
-                        if ($rfc) {
-                            $query->orWhereRaw('UPPER(RFC) = ?', [$rfc]);
-                        }
-
-                        if ($curp) {
-                            $query->orWhereRaw('UPPER(CURP) = ?', [$curp]);
-                        }
-                    });
-
-                // Construimos los datos a actualizar dinámicamente
-                $datosAActualizar = [
-                    'IMPORTE' => $importe,
-                ];
-
-                // Si el archivo trae una cuenta válida, la actualizamos también
-                if (!empty($cuenta)) {
-                    $datosAActualizar['CUENTAINICIAL'] = $cuenta;
-                }
-
-                $afectados = $consulta->update($datosAActualizar);
-
-                if ($afectados > 0) {
-                    $actualizados++;
-                } else {
-                    $noEncontrados++;
-                }
-            }
-        });
-
-        return response()->json([
-            'status' => true,
-            'message' => "Carga exitosa. Registros actualizados: {$actualizados}. No encontrados en registros: {$noEncontrados}.",
-            'actualizados' => $actualizados,
-            'noEncontrados' => $noEncontrados,
+    {
+        $request->validate([
+            'archivo' => 'required|file|mimes:csv,txt,xlsx,xls|max:5120',
+            'importe' => ['required', 'numeric', 'min:0.01'],
         ]);
-    } catch (\Throwable $e) {
-        Log::error('Error al actualizar tarjetas e importe en Oracle: ' . $e->getMessage());
 
-        return response()->json([
-            'status' => false,
-            'message' => 'Error al procesar el archivo: ' . $e->getMessage(),
-        ], 500);
+        $importe = $request->input('importe');
+        $file = $request->file('archivo');
+        $extension = strtolower($file->getClientOriginalExtension());
+        $filas = [];
+
+        try {
+            if (in_array($extension, ['csv', 'txt'], true)) {
+                $path = $file->getRealPath();
+                $contenido = file_get_contents($path);
+                $delimitador = substr_count($contenido, ';') > substr_count($contenido, ',')
+                    ? ';'
+                    : ',';
+
+                $handle = fopen($path, 'r');
+
+                if ($handle === false) {
+                    throw new \RuntimeException('No se pudo leer el archivo.');
+                }
+
+                $numeroFila = 0;
+
+                while (($data = fgetcsv($handle, 0, $delimitador)) !== false) {
+                    if ($numeroFila++ === 0) {
+                        continue;
+                    }
+
+                    $filas[] = [
+                        'cuenta' => isset($data[1]) ? trim((string) $data[1]) : null,
+                        'rfc' => isset($data[3]) ? strtoupper(trim((string) $data[3])) : null,
+                        'curp' => isset($data[4]) ? strtoupper(trim((string) $data[4])) : null,
+                    ];
+                }
+
+                fclose($handle);
+            } else {
+                $spreadsheet = IOFactory::load($file->getRealPath());
+                $hoja = $spreadsheet->getActiveSheet();
+
+                foreach ($hoja->toArray(null, true, true, false) as $indice => $row) {
+                    if ($indice === 0) {
+                        continue;
+                    }
+
+                    $filas[] = [
+                        'cuenta' => isset($row[1]) ? trim((string) $row[1]) : null,
+                        'rfc' => isset($row[3]) ? strtoupper(trim((string) $row[3])) : null,
+                        'curp' => isset($row[4]) ? strtoupper(trim((string) $row[4])) : null,
+                    ];
+                }
+            }
+
+            $actualizados = 0;
+            $noEncontrados = 0;
+
+            DB::connection('oracle_primary')->transaction(function () use (
+                $filas,
+                $importe,
+                &$actualizados,
+                &$noEncontrados
+            ) {
+                foreach ($filas as $fila) {
+                    $cuenta = $fila['cuenta'];
+                    $rfc = $fila['rfc'];
+                    $curp = $fila['curp'];
+
+                    if (!$rfc && !$curp) {
+                        continue;
+                    }
+
+                    $consulta = DB::connection('oracle_primary')
+                        ->table('registers')
+                        ->where(function ($query) use ($rfc, $curp) {
+                            if ($rfc) {
+                                $query->orWhereRaw('UPPER(RFC) = ?', [$rfc]);
+                            }
+
+                            if ($curp) {
+                                $query->orWhereRaw('UPPER(CURP) = ?', [$curp]);
+                            }
+                        });
+
+                    $datosAActualizar = [
+                        'IMPORTE' => $importe,
+                    ];
+
+                    if (!empty($cuenta)) {
+                        $datosAActualizar['CUENTAINICIAL'] = $cuenta;
+                    }
+
+                    $afectados = $consulta->update($datosAActualizar);
+
+                    if ($afectados > 0) {
+                        $actualizados++;
+                    } else {
+                        $noEncontrados++;
+                    }
+                }
+            });
+
+            return response()->json([
+                'status' => true,
+                'message' => "Carga exitosa. Registros actualizados: {$actualizados}. No encontrados en registros: {$noEncontrados}.",
+                'actualizados' => $actualizados,
+                'noEncontrados' => $noEncontrados,
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Error al actualizar tarjetas e importe en Oracle: ' . $e->getMessage());
+
+            return response()->json([
+                'status' => false,
+                'message' => 'Error al procesar el archivo: ' . $e->getMessage(),
+            ], 500);
+        }
     }
-}
 
     public function cargarPensiones(Request $request)
     {
@@ -329,7 +326,7 @@ class AdminController extends Controller
 
                 while (($data = fgetcsv($handle, 0, $delimitador)) !== false) {
                     if ($numeroFila++ === 0) {
-                        continue; // Omitir encabezados
+                        continue;
                     }
 
                     $filas[] = [
@@ -347,7 +344,7 @@ class AdminController extends Controller
 
                 foreach ($hoja->toArray(null, true, true, false) as $indice => $row) {
                     if ($indice === 0) {
-                        continue; // Omitir encabezados
+                        continue;
                     }
 
                     $filas[] = [
@@ -373,15 +370,12 @@ class AdminController extends Controller
                     $curpPensionada = $fila['curpPensionada'];
                     $cuenta = $fila['cuenta'];
 
-                    // Validar que exista al menos la cuenta y algún identificador clave
                     if (!$cuenta || (!$numEmpleado && !$rfcPensionada && !$curpPensionada)) {
                         continue;
                     }
 
-                    // Consulta para vincular/actualizar la cuenta en registros de pensiones
-                    // Puedes ajustar los nombres de las columnas de tu base de datos Oracle si difieren
                     $consulta = DB::connection('oracle_primary')
-                        ->table('pensiones') // O la tabla correspondiente a pensiones/vales
+                        ->table('pensiones')
                         ->where(function ($query) use ($numEmpleado, $rfcPensionada, $curpPensionada) {
                             if ($numEmpleado) {
                                 $query->orWhere('NUMEMPLEADO', $numEmpleado);
@@ -395,7 +389,7 @@ class AdminController extends Controller
                         });
 
                     $afectados = $consulta->update([
-                        'cuenta' => $cuenta, // O la columna de cuenta destinada para pensiones
+                        'cuenta' => $cuenta,
                     ]);
 
                     if ($afectados > 0) {
@@ -421,6 +415,7 @@ class AdminController extends Controller
             ], 500);
         }
     }
+
     public function descargarFormatos($idRegister)
     {
         if (!$idRegister || $idRegister === 'undefined') {
@@ -452,6 +447,7 @@ class AdminController extends Controller
 
         return $pdf->stream("formatos_vales_{$numeroEmpleado}.pdf");
     }
+
     public function descargarFormatoPensionados($idRegister)
     {
         if (!$idRegister || $idRegister === 'undefined') {
@@ -501,6 +497,7 @@ class AdminController extends Controller
             ], 500);
         }
     }
+
     public function users()
     {
         $typeUsers = DB::connection('oracle_primary')
@@ -641,6 +638,7 @@ class AdminController extends Controller
         $idType = (int) $tipoUsuarioActual === 1
             ? $request->integer('idtype')
             : 3;
+            
         User::create([
             'numEmpleado' => $request->input('numEmpleado'),
             'firstName' => trim($request->input('nomUsuario')),
@@ -834,6 +832,7 @@ class AdminController extends Controller
             'message' => 'Usuario actualizado correctamente.',
         ]);
     }
+
     public function buscarEmpleadoParaUsuario(Request $request)
     {
         $datos = $request->validate([
@@ -886,6 +885,7 @@ class AdminController extends Controller
             ], 503);
         }
     }
+
     public function listarUsuarios()
     {
         try {
@@ -983,31 +983,53 @@ class AdminController extends Controller
             $esAdministrador = $tipoUsuario === 1;
             $origen = $esAdministrador ? 'TODOS' : $this->origenReporteDelUsuario();
             $columnas = $this->columnasReportePorOrigen($origen);
-            $keys = array_column($columnas, 'key');
-            // ORIGEN se conserva para el filtro de la vista, sin mostrarse como columna.
-            $keys[] = 'ORIGEN';
+            
+            $registrosQuery = Register::query();
 
-            $registros = DB::connection('oracle_primary')
-                ->table('registers')
-                ->select(array_values(array_unique($keys)));
             if (!$esAdministrador) {
-                $registros->whereRaw('UPPER(ORIGEN) = ?', [$origen]);
+                $registrosQuery->whereRaw('UPPER(ORIGEN) = ?', [$origen]);
             }
-            $this->filtrarRegistrosPorEnlace($registros);
-            $registros = $registros
+            
+            $this->filtrarRegistrosPorEnlace($registrosQuery);
+            
+            $registros = $registrosQuery
                 ->whereRaw('EXTRACT(YEAR FROM CREATED_AT) = ?', [(int) $datos['anio']])
                 ->orderBy('IDREGISTER', 'desc')
                 ->get();
+
+            // Mapeamos los registros y buscamos los pensionados directamente por el número de empleado
+            $dataFormateada = $registros->map(function ($registro) {
+                $array = $registro->toArray();
+                
+                // Consulta directa a la tabla pensiones usando el número de empleado del registro
+                $numEmpleado = trim((string)($registro->NUMEMPLEADO ?? $registro->numempleado ?? ''));
+                
+                $pensionados = DB::connection('oracle_primary')
+                    ->table('pensiones')
+                    ->where('NUMEMPLEADO', $numEmpleado)
+                    ->get();
+
+                // Extraemos los nombres de los pensionados encontrados
+                $nombresPensionados = $pensionados->map(function($p) {
+                    return $p->NOMBREPENSIONADO ?? $p->nombrepensionado ?? $p->NOMBRE_PENSIONADO ?? null;
+                })->filter()->implode(', ');
+
+                // Asignamos el resultado a la columna PENSION
+                $array['PENSION'] = $nombresPensionados !== '' ? $nombresPensionados : 'N/A';
+                $array['ORIGEN'] = $registro->ORIGEN;
+
+                return $array;
+            });
 
             return response()->json([
                 'status' => true,
                 'anio' => (int) $datos['anio'],
                 'origen' => $origen,
                 'columnas' => $columnas,
-                'data' => $registros,
+                'data' => $dataFormateada,
             ]);
         } catch (\Throwable $e) {
-            Log::error('Error al consultar reporte de registros', [
+            Log::error('Error al consultar reporte de registros con pensionados', [
                 'user_id' => Auth::id(),
                 'anio' => $datos['anio'],
                 'error' => $e->getMessage(),
@@ -1020,9 +1042,6 @@ class AdminController extends Controller
         }
     }
 
-    /**
-     * Limita las consultas al enlace autenticado cuando la cuenta es tipo Enlace (idType 3).
-     */
     private function filtrarRegistrosPorEnlace($query, string $columna = 'IDENLACE'): void
     {
         $usuario = Auth::user();
@@ -1086,6 +1105,10 @@ class AdminController extends Controller
 
     private function columnasReportePorOrigen(string $origen): array
     {
+        $usuario = Auth::user();
+        $tipoUsuario = (int) ($usuario->idType ?? $usuario->idtype ?? $usuario->IDTYPE ?? 0);
+        $esAdministrador = $tipoUsuario === 1;
+
         $comunes = [
             ['key' => 'IDREGISTER', 'label' => 'ID de registro'],
             ['key' => 'NUMEMPLEADO', 'label' => 'Número de empleado'],
@@ -1101,30 +1124,27 @@ class AdminController extends Controller
             ['key' => 'CREATED_AT', 'label' => 'Fecha de registro'],
         ];
 
-        if ($origen === 'TODOS') {
-            $origenColumna = [['key' => 'ORIGEN', 'label' => 'Origen del registro']];
-            $columnasEspecificas = [
-                ['key' => 'PENSION', 'label' => 'Pensión alimenticia'],
-                ['key' => 'PUESTO', 'label' => 'Puesto'],
-                ['key' => 'UBICACION', 'label' => 'Ubicación física'],
-                ['key' => 'CLAVE', 'label' => 'Clave'],
-                ['key' => 'MODALIDAD', 'label' => 'Modalidad'],
-            ];
+        $columnas = $comunes;
 
-            return array_merge($comunes, $origenColumna, $columnasEspecificas);
+        // El campo de origen solo es visible para el usuario logueado de idtype 1
+        if ($esAdministrador) {
+            $columnas[] = ['key' => 'ORIGEN', 'label' => 'Origen del registro'];
         }
 
-        $especificas = $origen === 'SC'
-            ? [['key' => 'PENSION', 'label' => 'Pensión alimenticia']]
-            : [
-                ['key' => 'PUESTO', 'label' => 'Puesto'],
-                ['key' => 'UBICACION', 'label' => 'Ubicación física'],
-                ['key' => 'CLAVE', 'label' => 'Clave'],
-                ['key' => 'MODALIDAD', 'label' => 'Modalidad'],
-            ];
+        if ($origen === 'TODOS' || $origen === 'SC') {
+            $columnas[] = ['key' => 'PENSION', 'label' => 'Pensión alimenticia'];
+        }
 
-        return array_merge($comunes, $especificas);
+        if ($origen === 'TODOS' || $origen === 'GN') {
+            $columnas[] = ['key' => 'PUESTO', 'label' => 'Puesto'];
+            $columnas[] = ['key' => 'UBICACION', 'label' => 'Ubicación física'];
+            $columnas[] = ['key' => 'CLAVE', 'label' => 'Clave'];
+            $columnas[] = ['key' => 'MODALIDAD', 'label' => 'Modalidad'];
+        }
+
+        return $columnas;
     }
+
     public function obtenerTarjetas()
     {
         try {
@@ -1297,6 +1317,7 @@ class AdminController extends Controller
             ], 500);
         }
     }
+
     public function obtenerDetalleModuloTarjetas($idRegister)
     {
         try {
@@ -1326,7 +1347,6 @@ class AdminController extends Controller
                     'PENSION',
                     'IMPORTE',
                     'OBSERVACIONINICIAL',
-
                     'CREATED_AT',
                     'UPDATED_AT',
                 ])
@@ -1391,44 +1411,43 @@ class AdminController extends Controller
             ], 500);
         }
     }
+
     public function guardarObservacionInicial(Request $request)
-{
-    // Validamos que llegue el identificador del registro y el texto
-    $request->validate([
-        'idRegister' => ['required'],
-        'observacioninicial' => ['nullable', 'string', 'max:1000'],
-    ]);
+    {
+        $request->validate([
+            'idRegister' => ['required'],
+            'observacioninicial' => ['nullable', 'string', 'max:1000'],
+        ]);
 
-    $idRegister = $request->input('idRegister');
-    $observacion = $request->input('observacioninicial');
+        $idRegister = $request->input('idRegister');
+        $observacion = $request->input('observacioninicial');
 
-    try {
-        // Actualizamos directamente la columna en la conexión de Oracle
-        $afectados = DB::connection('oracle_primary')
-            ->table('registers')
-            ->where('IDREGISTER', $idRegister)
-            ->update([
-                'OBSERVACIONINICIAL' => $observacion,
+        try {
+            $afectados = DB::connection('oracle_primary')
+                ->table('registers')
+                ->where('IDREGISTER', $idRegister)
+                ->update([
+                    'OBSERVACIONINICIAL' => $observacion,
+                ]);
+
+            if ($afectados === 0) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'No se encontró el registro especificado.',
+                ], 404);
+            }
+
+            return response()->json([
+                'status' => true,
+                'message' => 'Observación actualizada correctamente.',
             ]);
+        } catch (\Throwable $e) {
+            Log::error('Error al actualizar la observación inicial: ' . $e->getMessage());
 
-        if ($afectados === 0) {
             return response()->json([
                 'status' => false,
-                'message' => 'No se encontró el registro especificado.',
-            ], 404);
+                'message' => 'Ocurrió un error al guardar la observación.',
+            ], 500);
         }
-
-        return response()->json([
-            'status' => true,
-            'message' => 'Observación actualizada correctamente.',
-        ]);
-    } catch (\Throwable $e) {
-        Log::error('Error al actualizar la observación inicial: ' . $e->getMessage());
-
-        return response()->json([
-            'status' => false,
-            'message' => 'Ocurrió un error al guardar la observación.',
-        ], 500);
     }
-}
 }
