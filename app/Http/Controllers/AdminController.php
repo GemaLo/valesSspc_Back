@@ -287,6 +287,126 @@ class AdminController extends Controller
         }
     }
 
+    public function cargarPensiones(Request $request)
+{
+    $request->validate([
+        'archivo' => 'required|file|mimes:csv,txt,xlsx,xls|max:5120',
+    ]);
+
+    $file = $request->file('archivo');
+    $extension = strtolower($file->getClientOriginalExtension());
+    $filas = [];
+
+    try {
+        if (in_array($extension, ['csv', 'txt'], true)) {
+            $path = $file->getRealPath();
+            $contenido = file_get_contents($path);
+            $delimitador = substr_count($contenido, ';') > substr_count($contenido, ',')
+                ? ';'
+                : ',';
+
+            $handle = fopen($path, 'r');
+
+            if ($handle === false) {
+                throw new \RuntimeException('No se pudo leer el archivo de pensiones.');
+            }
+
+            $numeroFila = 0;
+
+            while (($data = fgetcsv($handle, 0, $delimitador)) !== false) {
+                if ($numeroFila++ === 0) {
+                    continue; // Omitir encabezados
+                }
+
+                $filas[] = [
+                    'numEmpleado' => isset($data[0]) ? trim((string) $data[0]) : null,
+                    'rfcPensionada' => isset($data[3]) ? strtoupper(trim((string) $data[3])) : null,
+                    'curpPensionada' => isset($data[4]) ? strtoupper(trim((string) $data[4])) : null,
+                    'cuenta' => isset($data[6]) ? trim((string) $data[6]) : null,
+                ];
+            }
+
+            fclose($handle);
+        } else {
+            $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($file->getRealPath());
+            $hoja = $spreadsheet->getActiveSheet();
+
+            foreach ($hoja->toArray(null, true, true, false) as $indice => $row) {
+                if ($indice === 0) {
+                    continue; // Omitir encabezados
+                }
+
+                $filas[] = [
+                    'numEmpleado' => isset($row[0]) ? trim((string) $row[0]) : null,
+                    'rfcPensionada' => isset($row[3]) ? strtoupper(trim((string) $row[3])) : null,
+                    'curpPensionada' => isset($row[4]) ? strtoupper(trim((string) $row[4])) : null,
+                    'cuenta' => isset($row[6]) ? trim((string) $row[6]) : null,
+                ];
+            }
+        }
+
+        $actualizados = 0;
+        $noEncontrados = 0;
+
+        DB::connection('oracle_primary')->transaction(function () use (
+            $filas,
+            &$actualizados,
+            &$noEncontrados
+        ) {
+            foreach ($filas as $fila) {
+                $numEmpleado = $fila['numEmpleado'];
+                $rfcPensionada = $fila['rfcPensionada'];
+                $curpPensionada = $fila['curpPensionada'];
+                $cuenta = $fila['cuenta'];
+
+                // Validar que exista al menos la cuenta y algún identificador clave
+                if (!$cuenta || (!$numEmpleado && !$rfcPensionada && !$curpPensionada)) {
+                    continue;
+                }
+
+                // Consulta para vincular/actualizar la cuenta en registros de pensiones
+                // Puedes ajustar los nombres de las columnas de tu base de datos Oracle si difieren
+                $consulta = DB::connection('oracle_primary')
+                    ->table('pensiones') // O la tabla correspondiente a pensiones/vales
+                    ->where(function ($query) use ($numEmpleado, $rfcPensionada, $curpPensionada) {
+                        if ($numEmpleado) {
+                            $query->orWhere('NUMEMPLEADO', $numEmpleado);
+                        }
+                        if ($rfcPensionada) {
+                            $query->orWhereRaw('UPPER(RFC_PENSIONADA) = ?', [$rfcPensionada]);
+                        }
+                        if ($curpPensionada) {
+                            $query->orWhereRaw('UPPER(CURP_PENSIONADA) = ?', [$curpPensionada]);
+                        }
+                    });
+
+                $afectados = $consulta->update([
+                    'cuenta' => $cuenta, // O la columna de cuenta destinada para pensiones
+                ]);
+
+                if ($afectados > 0) {
+                    $actualizados++;
+                } else {
+                    $noEncontrados++;
+                }
+            }
+        });
+
+        return response()->json([
+            'status' => true,
+            'message' => "Carga de pensiones exitosa. Cuentas actualizadas: {$actualizados}. No encontrados: {$noEncontrados}.",
+            'actualizados' => $actualizados,
+            'noEncontrados' => $noEncontrados,
+        ]);
+    } catch (\Throwable $e) {
+        Log::error('Error al actualizar pensiones en Oracle: ' . $e->getMessage());
+
+        return response()->json([
+            'status' => false,
+            'message' => 'Error al procesar el archivo de pensiones: ' . $e->getMessage(),
+        ], 500);
+    }
+}
     public function descargarFormatos($idRegister)
     {
         if (!$idRegister || $idRegister === 'undefined') {

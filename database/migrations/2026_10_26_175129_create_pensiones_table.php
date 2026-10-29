@@ -15,7 +15,7 @@ return new class extends Migration
             $table->string('nombrePensionado');
             $table->string('curp')->nullable();
             $table->string('rfc')->nullable();
-            $table->string('cuenta');
+            $table->string('cuenta')->nullable();
             $table->integer('porcentaje');
             $table->timestamps();
         });
