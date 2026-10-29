@@ -318,6 +318,55 @@ class AdminController extends Controller
 
         return $pdf->stream("formatos_vales_{$numeroEmpleado}.pdf");
     }
+    public function descargarFormatoPensionados($idRegister)
+    {
+        if (!$idRegister || $idRegister === 'undefined') {
+            return response()->json([
+                'status' => false,
+                'message' => 'El ID del registro es inválido.',
+            ], 400);
+        }
+
+        try {
+            $consultaEmpleado = Register::query()->where('IDREGISTER', $idRegister);
+            $this->filtrarRegistrosPorEnlace($consultaEmpleado);
+            $empleado = $consultaEmpleado->first();
+
+            if (!$empleado) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'No se encontró el empleado.',
+                ], 404);
+            }
+
+            $numeroEmpleado = trim((string) ($empleado->numempleado ?? $empleado->NUMEMPLEADO ?? ''));
+            $pensionados = $empleado->pensionados()
+                ->orderBy('NOMBREPENSIONADO')
+                ->get();
+
+            if ($pensionados->isEmpty()) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'El empleado no tiene pensionados registrados.',
+                ], 404);
+            }
+
+            $pdf = Pdf::loadView('pdf.formato_pensionados', compact('empleado', 'pensionados'));
+            $pdf->setPaper('letter', 'landscape');
+
+            return $pdf->stream("pensionados_{$numeroEmpleado}.pdf");
+        } catch (\Throwable $e) {
+            Log::error('Error al generar formato de pensionados', [
+                'idRegister' => $idRegister,
+                'message' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'status' => false,
+                'message' => 'No se pudo generar el PDF de pensionados.',
+            ], 500);
+        }
+    }
     public function users()
     {
         $typeUsers = DB::connection('oracle_primary')
@@ -1114,8 +1163,7 @@ class AdminController extends Controller
         try {
             $conexion = DB::connection('oracle_primary');
 
-            $empleadoQuery = $conexion
-                ->table('registers')
+            $empleadoQuery = Register::query()
                 ->select([
                     'IDREGISTER',
                     'NOMBRECOMPLETO',
@@ -1152,6 +1200,10 @@ class AdminController extends Controller
                 ], 404);
             }
 
+            $pensionados = $empleado->pensionados()
+                ->orderBy('NOMBREPENSIONADO')
+                ->get();
+
             $tarjetas = $conexion
                 ->table('cards as c')
                 ->leftJoin('status as s', 's.idStatus', '=', 'c.idStatus')
@@ -1180,6 +1232,7 @@ class AdminController extends Controller
                 'status' => true,
                 'data' => [
                     'empleado' => $empleado,
+                    'pensionados' => $pensionados,
                     'tarjetas' => $tarjetas,
                     'estatusDisponibles' => $estatus,
                 ],
@@ -1198,3 +1251,10 @@ class AdminController extends Controller
         }
     }
 }
+
+
+
+
+
+
+

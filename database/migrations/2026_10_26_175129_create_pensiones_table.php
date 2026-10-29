@@ -11,7 +11,10 @@ return new class extends Migration
         Schema::create('pensiones', function (Blueprint $table) {
             $table->id('idPension');
             $table->string('numEmpleado');
+            $table->string('nomEmpleado')->nullable();
             $table->string('nombrePensionado');
+            $table->string('curp')->nullable();
+            $table->string('rfc')->nullable();
             $table->string('cuenta');
             $table->integer('porcentaje');
             $table->timestamps();

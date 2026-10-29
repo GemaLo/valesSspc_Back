@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use App\Models\Register;
+use App\Models\Pension;
 
 class GestorController extends Controller
 {
@@ -59,6 +60,42 @@ class GestorController extends Controller
         }
 
         $empleados = $empleadosCentral->concat($empleadosGn);
+
+        if ($empleados->isNotEmpty()) {
+            $numerosEmpleado = $empleados
+                ->map(fn($empleado) => trim((string) ($empleado->num_empleado ?? $empleado->NUM_EMPLEADO ?? '')))
+                ->filter()
+                ->unique()
+                ->values()
+                ->all();
+
+            $resumenesPension = DB::connection('oracle_primary')
+                ->table('registers')
+                ->select('NUMEMPLEADO', 'ORIGEN', 'PENSION')
+                ->whereIn('NUMEMPLEADO', $numerosEmpleado)
+                ->whereYear('CREATED_AT', now()->year)
+                ->orderByDesc('UPDATED_AT')
+                ->get();
+
+            $pensionPorEmpleado = [];
+            foreach ($resumenesPension as $resumen) {
+                $codigoOrigen = strtoupper(trim((string) ($resumen->ORIGEN ?? '')));
+                $numero = strtoupper(trim((string) ($resumen->NUMEMPLEADO ?? '')));
+                $clave = $codigoOrigen . '|' . $numero;
+                if (!array_key_exists($clave, $pensionPorEmpleado)) {
+                    $pensionPorEmpleado[$clave] = trim((string) ($resumen->PENSION ?? ''));
+                }
+            }
+
+            $empleados = $empleados->map(function ($empleado) use ($pensionPorEmpleado) {
+                $origen = strtoupper(trim((string) ($empleado->origen ?? $empleado->ORIGEN ?? '')));
+                $codigoOrigen = in_array($origen, ['SC', 'SECTOR CENTRAL'], true) ? 'SC' : 'GN';
+                $numero = strtoupper(trim((string) ($empleado->num_empleado ?? $empleado->NUM_EMPLEADO ?? '')));
+                $clave = $codigoOrigen . '|' . $numero;
+                $empleado->pension = $pensionPorEmpleado[$clave] ?? 'N/A';
+                return $empleado;
+            });
+        }
 
         return response()->json([
             'status' => true,
@@ -121,6 +158,180 @@ class GestorController extends Controller
 
         return response()->stream($callback, 200, $headers);
     }
+    public function cargarPensionados(Request $request)
+    {
+        $datos = $request->validate([
+            'pensionados' => ['required', 'array', 'min:1', 'max:10000'],
+            'pensionados.*.numEmpleado' => ['required', 'string', 'max:30'],
+            'pensionados.*.nomEmpleado' => ['nullable', 'string', 'max:255'],
+            'pensionados.*.nombrePensionado' => ['required', 'string', 'max:255'],
+            'pensionados.*.curp' => ['required', 'string', 'max:30'],
+            'pensionados.*.rfc' => ['required', 'string', 'max:20'],
+            'pensionados.*.porcentaje' => ['required', 'integer', 'min:0', 'max:100'],
+        ]);
+
+        $usuario = $request->user();
+        $origenUsuario = strtolower(trim((string) (
+            $usuario->origen ?? $usuario->ORIGEN ?? ''
+        )));
+        $origen = in_array($origenUsuario, [
+            'sc', 'sspc', 'sector central', 'secretaria', 'secretaría',
+        ], true) ? 'SC' : 'GN';
+
+        $grupos = collect($datos['pensionados'])
+            ->map(function (array $pensionado) {
+                $pensionado['numEmpleado'] = trim($pensionado['numEmpleado']);
+                $pensionado['nomEmpleado'] = trim((string) ($pensionado['nomEmpleado'] ?? ''));
+                $pensionado['nombrePensionado'] = trim($pensionado['nombrePensionado']);
+                $pensionado['curp'] = strtoupper(trim($pensionado['curp']));
+                $pensionado['rfc'] = strtoupper(trim($pensionado['rfc']));
+                return $pensionado;
+            })
+            ->groupBy(fn(array $pensionado) => strtoupper($pensionado['numEmpleado']));
+
+        $empleadosActualizados = 0;
+        $registrosPensionActualizados = 0;
+        $pensionadosGuardados = 0;
+        $sinRegistro = [];
+        $sinNombre = [];
+
+        try {
+            DB::connection('oracle_primary')->transaction(function () use (
+                $grupos,
+                $origen,
+                &$empleadosActualizados,
+                &$registrosPensionActualizados,
+                &$pensionadosGuardados,
+                &$sinRegistro,
+                &$sinNombre
+            ) {
+                foreach ($grupos as $numeroEmpleado => $filas) {
+                    $empleados = DB::connection('oracle_primary')
+                        ->table('registers')
+                        ->select([
+                            'IDREGISTER',
+                            'NOMBRECOMPLETO',
+                            'NOMEMPLEADO',
+                            'APPEMPLEADO',
+                            'APMEMPLEADO',
+                            'CUENTAINICIAL',
+                        ])
+                        ->whereRaw('UPPER(TRIM(NUMEMPLEADO)) = ?', [$numeroEmpleado])
+                        ->whereRaw('UPPER(TRIM(ORIGEN)) = ?', [$origen])
+                        ->whereYear('CREATED_AT', now()->year)
+                        ->get();
+
+                    if ($empleados->isEmpty()) {
+                        $sinRegistro[] = $numeroEmpleado;
+                        continue;
+                    }
+
+                    $empleado = $empleados->first();
+                    $nombreEmpleado = '';
+
+                    // Puede haber varios registros del mismo empleado; toma el primero que tenga nombre.
+                    foreach ($empleados as $empleadoCandidato) {
+                        $nombreCandidato = trim((string) ($empleadoCandidato->NOMBRECOMPLETO ?? ''));
+                        if ($nombreCandidato === '') {
+                            $nombreCandidato = trim(implode(' ', array_filter([
+                                $empleadoCandidato->NOMEMPLEADO ?? '',
+                                $empleadoCandidato->APPEMPLEADO ?? '',
+                                $empleadoCandidato->APMEMPLEADO ?? '',
+                            ], fn($parte) => trim((string) $parte) !== '')));
+                        }
+
+                        if ($nombreCandidato !== '') {
+                            $nombreEmpleado = $nombreCandidato;
+                            $empleado = $empleadoCandidato;
+                            break;
+                        }
+                    }
+
+                    if ($nombreEmpleado === '') {
+                        foreach ($filas as $fila) {
+                            $nombreArchivo = trim((string) ($fila['nomEmpleado'] ?? ''));
+                            if ($nombreArchivo !== '') {
+                                $nombreEmpleado = $nombreArchivo;
+                                break;
+                            }
+                        }
+                    }
+                    if ($nombreEmpleado === '') {
+                        $sinNombre[] = $numeroEmpleado;
+                        continue;
+                    }
+
+                    $cuenta = trim((string) ($empleado->CUENTAINICIAL ?? '')) ?: 'N/A';
+
+                    // La carga reemplaza los detalles anteriores para evitar duplicarlos.
+                    Pension::query()->where('numEmpleado', $numeroEmpleado)->delete();
+
+                    $filasUnicas = $filas->unique(fn(array $fila) =>
+                        $fila['curp'] . '|' . $fila['porcentaje']
+                    )->values();
+
+                    foreach ($filasUnicas as $fila) {
+                        Pension::create([
+                            'numEmpleado' => $numeroEmpleado,
+                            'nomEmpleado' => $nombreEmpleado,
+                            'nombrePensionado' => $fila['nombrePensionado'],
+                            'curp' => $fila['curp'],
+                            'rfc' => $fila['rfc'],
+                            'cuenta' => $cuenta,
+                            'porcentaje' => (int) $fila['porcentaje'],
+                        ]);
+                    }
+
+                    $cantidadPensionados = $filasUnicas->pluck('curp')->unique()->count();
+                    $resumen = 'SI (' . $cantidadPensionados . ' pensionado'
+                        . ($cantidadPensionados === 1 ? '' : 's') . ')';
+
+                    $registrosActualizados = DB::connection('oracle_primary')
+                        ->table('registers')
+                        ->whereRaw('UPPER(TRIM(NUMEMPLEADO)) = ?', [$numeroEmpleado])
+                        ->whereRaw('UPPER(TRIM(ORIGEN)) = ?', [$origen])
+                        ->whereYear('CREATED_AT', now()->year)
+                        ->update(['PENSION' => $resumen]);
+
+                    $resumenVerificado = DB::connection('oracle_primary')
+                        ->table('registers')
+                        ->whereRaw('UPPER(TRIM(NUMEMPLEADO)) = ?', [$numeroEmpleado])
+                        ->whereRaw('UPPER(TRIM(ORIGEN)) = ?', [$origen])
+                        ->whereYear('CREATED_AT', now()->year)
+                        ->where('PENSION', $resumen)
+                        ->exists();
+
+                    if (!$resumenVerificado) {
+                        throw new \RuntimeException(
+                            'No se pudo actualizar PENSION en REGISTERS para el empleado ' . $numeroEmpleado . '.'
+                        );
+                    }
+
+                    $registrosPensionActualizados += $registrosActualizados;
+                    $empleadosActualizados++;
+                    $pensionadosGuardados += $filasUnicas->count();
+                }
+            });
+
+            return response()->json([
+                'status' => true,
+                'message' => 'Carga de pensionados completada.',
+                'empleadosActualizados' => $empleadosActualizados,
+                'registrosPensionActualizados' => $registrosPensionActualizados,
+                'pensionadosGuardados' => $pensionadosGuardados,
+                'sinRegistro' => $sinRegistro,
+                'sinNombre' => $sinNombre,
+            ]);
+        } catch (\Throwable $e) {
+            report($e);
+
+            return response()->json([
+                'status' => false,
+                'message' => 'Ocurrió un error al guardar los pensionados.',
+            ], 500);
+        }
+    }
+
     public function guardarCaptura(Request $request)
     {
         $empleados = $request->input('empleados', []);
@@ -247,3 +458,12 @@ class GestorController extends Controller
         }
     }
 }
+
+
+
+
+
+
+
+
+

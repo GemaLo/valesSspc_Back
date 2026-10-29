@@ -21,11 +21,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/gestor/empleados', [GestorController::class, 'getEmpleados']);
     Route::post('/gestor/exportar-excel', [GestorController::class, 'exportExcel']);
     Route::post('/gestor/guardar-captura', [GestorController::class, 'guardarCaptura']);
+    Route::post('/gestor/pensionados/cargar', [GestorController::class, 'cargarPensionados']);
 
     Route::get('/gestor/vales/registrados', [AdminController::class, 'obtenerRegistrosVales']);
     Route::post('/gestor/vales/actualizar-estatus', [AdminController::class, 'actualizarEstatusVale']);
     Route::post('/gestor/vales/cargar-tarjetas', [AdminController::class, 'cargarTarjetas']);
     Route::get('/gestor/vales/descargar-formatos/{idRegister}', [AdminController::class, 'descargarFormatos']);
+    Route::get('/gestor/vales/descargar-formatos-pensionados/{idRegister}', [AdminController::class, 'descargarFormatoPensionados']);
     // Route::get('/gestor/vales/descargar-formatos/{idRegister}',[AdminController::class, 'descargarFormatos']);
     Route::get('/admin/users', [AdminController::class, 'listarUsuarios']);
     Route::get('/admin/users/empleado', [AdminController::class, 'buscarEmpleadoParaUsuario']);
@@ -59,3 +61,4 @@ Route::get(
     [AdminController::class, 'obtenerDetalleModuloTarjetas']
 );
 });
+
