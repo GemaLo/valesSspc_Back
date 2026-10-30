@@ -997,11 +997,9 @@ class AdminController extends Controller
                 ->orderBy('IDREGISTER', 'desc')
                 ->get();
 
-            // Mapeamos los registros y buscamos los pensionados directamente por el número de empleado
             $dataFormateada = $registros->map(function ($registro) {
                 $array = $registro->toArray();
                 
-                // Consulta directa a la tabla pensiones usando el número de empleado del registro
                 $numEmpleado = trim((string)($registro->NUMEMPLEADO ?? $registro->numempleado ?? ''));
                 
                 $pensionados = DB::connection('oracle_primary')
@@ -1009,12 +1007,10 @@ class AdminController extends Controller
                     ->where('NUMEMPLEADO', $numEmpleado)
                     ->get();
 
-                // Extraemos los nombres de los pensionados encontrados
                 $nombresPensionados = $pensionados->map(function($p) {
                     return $p->NOMBREPENSIONADO ?? $p->nombrepensionado ?? $p->NOMBRE_PENSIONADO ?? null;
                 })->filter()->implode(', ');
 
-                // Asignamos el resultado a la columna PENSION
                 $array['PENSION'] = $nombresPensionados !== '' ? $nombresPensionados : 'N/A';
                 $array['ORIGEN'] = $registro->ORIGEN;
 
@@ -1126,7 +1122,6 @@ class AdminController extends Controller
 
         $columnas = $comunes;
 
-        // El campo de origen solo es visible para el usuario logueado de idtype 1
         if ($esAdministrador) {
             $columnas[] = ['key' => 'ORIGEN', 'label' => 'Origen del registro'];
         }
@@ -1135,7 +1130,8 @@ class AdminController extends Controller
             $columnas[] = ['key' => 'PENSION', 'label' => 'Pensión alimenticia'];
         }
 
-        if ($origen === 'TODOS' || $origen === 'GN') {
+        // Modificado para que aparezcan SOLAMENTE si el origen es estrictamente 'GN'
+        if ($origen === 'GN') {
             $columnas[] = ['key' => 'PUESTO', 'label' => 'Puesto'];
             $columnas[] = ['key' => 'UBICACION', 'label' => 'Ubicación física'];
             $columnas[] = ['key' => 'CLAVE', 'label' => 'Clave'];
