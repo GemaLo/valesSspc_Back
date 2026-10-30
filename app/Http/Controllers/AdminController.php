@@ -736,16 +736,16 @@ class AdminController extends Controller
     public function actualizarUsuario(Request $request, $id_user)
     {
         $request->validate([
-            'numEmpleado' => ['required', 'string', 'max:20'],
-            'origen'      => ['required', 'in:secretaría,guardia'],
-            'firstName'   => ['required', 'string', 'max:255'],
-            'lastName'    => ['required', 'string', 'max:255'],
-            'middleName'  => ['nullable', 'string', 'max:255'],
-            'nivel'       => ['required', 'string', 'max:255'],
-            'unidad'      => ['required', 'string', 'max:255'],
-            'email'       => ['required', 'email', 'max:255'],
-            'active'      => ['required', 'boolean'],
-            'idType'      => ['nullable', 'integer'],
+            'numEmpleado'   => ['required', 'string', 'max:20'],
+            'origen'        => ['required', 'in:secretaría,guardia'],
+            'nomUsuario'    => ['required', 'string', 'max:255'],
+            'appUsuario'    => ['required', 'string', 'max:255'],
+            'apmUsuario'    => ['nullable', 'string', 'max:255'],
+            'cargo'         => ['required', 'string', 'max:255'],
+            'unidad'        => ['required', 'string', 'max:255'],
+            'email'         => ['required', 'email', 'max:255'],
+            'active'        => ['required', 'boolean'],
+            'idtype'        => ['nullable', 'integer'],
             'nuevaPassword' => ['nullable', 'string', 'min:8'],
         ]);
 
@@ -800,10 +800,10 @@ class AdminController extends Controller
 
         $datos = [
             'NUMEMPLEADO' => $numero,
-            'FIRSTNAME'   => trim($request->input('firstName')),
-            'LASTNAME'    => trim($request->input('lastName')),
-            'MIDDLENAME'  => trim($request->input('middleName', '')),
-            'NIVEL'       => trim($request->input('nivel')),
+            'firstname'   => trim($request->input('nomUsuario')),
+            'lastname'    => trim($request->input('appUsuario')),
+            'middlename'  => trim($request->input('apmUsuario', '')),
+            'NIVEL'       => trim($request->input('cargo')),
             'UNIDAD'      => trim($request->input('unidad')),
             'EMAIL'       => $email,
             'ORIGEN'      => $origen,
@@ -815,8 +815,8 @@ class AdminController extends Controller
             ?? Auth::user()->IDTYPE
             ?? null;
 
-        if ((int) $tipoUsuarioActual === 1 && $request->filled('idType')) {
-            $datos['IDTYPE'] = $request->integer('idType');
+        if ((int) $tipoUsuarioActual === 1 && $request->filled('idtype')) {
+            $datos['IDTYPE'] = $request->integer('idtype');
         }
 
         if ($request->filled('nuevaPassword')) {
