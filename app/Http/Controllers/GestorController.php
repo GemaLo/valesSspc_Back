@@ -279,7 +279,7 @@ class GestorController extends Controller
 
                     foreach ($filasUnicas as $fila) {
                         Pension::create([
-                            'numEmpleado' => $numeroEmpleado,
+                            'NUMEMPLEADO' => $numeroEmpleado,
                             'nomEmpleado' => $nombreEmpleado,
                             'nombrePensionado' => $fila['nombrePensionado'],
                             'curp' => $fila['curp'] !== '' ? $fila['curp'] : null,
