@@ -442,10 +442,12 @@ class AdminController extends Controller
 
             $pensionados = Pension::where('NUMEMPLEADO', '=', $numeroEmpleado)->get();
             
+            // Si la relación del modelo Register ya está definida, también puedes usar $empleado->pensionados
             if ($pensionados->isEmpty() && method_exists($empleado, 'pensionados')) {
                 $pensionados = $empleado->pensionados()->get();
             }
 
+            // Calcular importe neto si tiene pensiones registradas
             $rawImporte = (float) ($empleado->IMPORTE ?? $empleado->importe ?? 0);
             
             if ($pensionados->isNotEmpty()) {

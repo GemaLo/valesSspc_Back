@@ -9,9 +9,8 @@ class Pension extends Model
 {
     protected $connection = 'oracle_primary';
     protected $table = 'pensiones';
-    protected $primaryKey = 'IDPENSION'; // <-- En mayúsculas
-    public $incrementing = false; // Dependiendo si es autoincrementable o secuencia
-    protected $keyType = 'int';
+    protected $primaryKey = 'IDPENSION';
+    public $incrementing = true;
 
     public function empleado(): BelongsTo
     {

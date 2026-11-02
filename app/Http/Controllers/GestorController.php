@@ -185,7 +185,7 @@ class GestorController extends Controller
 
         $grupos = collect($datos['pensionados'])
             ->map(function (array $pensionado) {
-                $pensionado['NUMEMPLEADO'] = trim($pensionado['numEmpleado']);
+                $pensionado['numEmpleado'] = trim($pensionado['numEmpleado']);
                 $pensionado['nomEmpleado'] = trim((string) ($pensionado['nomEmpleado'] ?? ''));
                 $pensionado['nombrePensionado'] = trim($pensionado['nombrePensionado']);
                 // Limpiamos y convertimos a mayúsculas de forma segura si vienen vacíos
@@ -277,17 +277,17 @@ class GestorController extends Controller
                         fn(array $fila) => ($fila['curp'] !== '' ? $fila['curp'] : $fila['nombrePensionado']) . '|' . $fila['porcentaje']
                     )->values();
 
-                    foreach ($filasUnicas as $fila) {
-                        Pension::create([
-                            'NUMEMPLEADO' => $numeroEmpleado,
-                            'nomEmpleado' => $nombreEmpleado,
-                            'nombrePensionado' => $fila['nombrePensionado'],
-                            'curp' => $fila['curp'] !== '' ? $fila['curp'] : null,
-                            'rfc' => $fila['rfc'] !== '' ? $fila['rfc'] : null,
-                            'cuenta' => $cuenta,
-                            'porcentaje' => (int) $fila['porcentaje'],
-                        ]);
-                    }
+foreach ($filasUnicas as $fila) {
+        Pension::create([
+            'NUMEMPLEADO'      => $numeroEmpleado,
+            'NOMEMPLEADO'      => $nombreEmpleado,
+            'NOMBREPENSIONADO' => $fila['nombrePensionado'], // 👈 En mayúsculas
+            'CURP'             => $fila['curp'] !== '' ? $fila['curp'] : null,
+            'RFC'              => $fila['rfc'] !== '' ? $fila['rfc'] : null,
+            'CUENTA'           => $cuenta,
+            'PORCENTAJE'       => (int) $fila['porcentaje'],
+        ]);
+    }
 
                     $cantidadPensionados = $filasUnicas->map(
                         fn($fila) =>
