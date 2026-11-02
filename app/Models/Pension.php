@@ -7,9 +7,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Pension extends Model
 {
-    protected $primaryKey = 'idPension';
     protected $connection = 'oracle_primary';
     protected $table = 'pensiones';
+    protected $primaryKey = 'IDPENSION'; // <-- En mayúsculas
+    public $incrementing = false; // Dependiendo si es autoincrementable o secuencia
+    protected $keyType = 'int';
 
     public function empleado(): BelongsTo
     {
@@ -18,11 +20,11 @@ class Pension extends Model
 
     protected $fillable = [
         'NUMEMPLEADO',
-        'nomEmpleado',
-        'nombrePensionado',
-        'curp',
-        'rfc',
-        'cuenta',
-        'porcentaje'
+        'NOMEMPLEADO',
+        'NOMBREPENSIONADO',
+        'CURP',
+        'RFC',
+        'CUENTA',
+        'PORCENTAJE'
     ];
 }

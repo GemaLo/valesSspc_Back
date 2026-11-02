@@ -14,12 +14,12 @@ class Register extends Model
     
     public $timestamps = true; 
 
-    public function pensionados(): HasMany
-    {
-        // Corregido: Llave foránea y local en mayúsculas para Oracle
-        return $this->hasMany(Pension::class, 'NUMEMPLEADO', 'NUMEMPLEADO');
-    }
-
+public function pensionados(): HasMany
+{
+    // Primer parámetro: Llave foránea en la tabla 'pensiones'
+    // Segundo parámetro: Llave local en la tabla 'registers'
+    return $this->hasMany(Pension::class, 'NUMEMPLEADO', 'NUMEMPLEADO');
+}
     protected $fillable = [
         'NOMBRECOMPLETO',
         'NUMEMPLEADO',

@@ -185,7 +185,7 @@ class GestorController extends Controller
 
         $grupos = collect($datos['pensionados'])
             ->map(function (array $pensionado) {
-                $pensionado['numEmpleado'] = trim($pensionado['numEmpleado']);
+                $pensionado['NUMEMPLEADO'] = trim($pensionado['numEmpleado']);
                 $pensionado['nomEmpleado'] = trim((string) ($pensionado['nomEmpleado'] ?? ''));
                 $pensionado['nombrePensionado'] = trim($pensionado['nombrePensionado']);
                 // Limpiamos y convertimos a mayúsculas de forma segura si vienen vacíos
@@ -279,7 +279,7 @@ class GestorController extends Controller
 
                     foreach ($filasUnicas as $fila) {
                         Pension::create([
-                            'numEmpleado' => $numeroEmpleado,
+                            'NUMEMPLEADO' => $numeroEmpleado,
                             'nomEmpleado' => $nombreEmpleado,
                             'nombrePensionado' => $fila['nombrePensionado'],
                             'curp' => $fila['curp'] !== '' ? $fila['curp'] : null,
@@ -289,7 +289,6 @@ class GestorController extends Controller
                         ]);
                     }
 
-                    // Conteo robusto: cuenta por CURP única, o por Nombre de pensionado si la CURP está vacía
                     $cantidadPensionados = $filasUnicas->map(
                         fn($fila) =>
                         $fila['curp'] !== '' ? $fila['curp'] : $fila['nombrePensionado']

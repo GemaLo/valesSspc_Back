@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Models\Card;
+use App\Models\Pension;
 use App\Models\Register;
 use Illuminate\Http\Request;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -175,7 +176,7 @@ class AdminController extends Controller
             ], 500);
         }
     }
-    
+
     public function cargarTarjetas(Request $request)
     {
         $request->validate([
@@ -425,27 +426,59 @@ class AdminController extends Controller
             ], 400);
         }
 
-        $consultaEmpleado = Register::query()->where('IDREGISTER', $idRegister);
-        $this->filtrarRegistrosPorEnlace($consultaEmpleado);
-        $empleado = $consultaEmpleado->first();
+        try {
+            $consultaEmpleado = Register::query()->where('IDREGISTER', $idRegister);
+            $this->filtrarRegistrosPorEnlace($consultaEmpleado);
+            $empleado = $consultaEmpleado->first();
 
-        if (!$empleado) {
+            if (!$empleado) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'No se encontró el registro en la base de datos.',
+                ], 404);
+            }
+
+            $numeroEmpleado = trim((string) ($empleado->numempleado ?? $empleado->NUMEMPLEADO ?? $idRegister));
+
+            // 1. Verificar si el empleado cuenta con registros en la tabla de pensiones
+            $pensionados = $empleado->pensionados()->orderBy('NOMBREPENSIONADO')->get();
+            if ($pensionados->isNotEmpty()) {
+                $pdf = Pdf::loadView('pdf.formato_pensionados', compact('empleado', 'pensionados'));
+                $pdf->setPaper('letter', 'landscape');
+                return $pdf->stream("pensionados_{$numeroEmpleado}.pdf");
+            }
+
+            // 2. Verificar si ya existe una tarjeta de reposición asociada en la tabla 'cards'
+            // (Asumiendo que las tarjetas de reposición o adicionales se guardan vinculadas al registro)
+            $tieneReposicion = DB::connection('oracle_primary')
+                ->table('cards')
+                ->where('IDREGISTER', $idRegister)
+                ->exists();
+
+            // Definimos los dígitos limpios de la cuenta para la vista
+            $digits = str_split(str_pad(preg_replace('/[^0-9]/', '', $empleado->CUENTAINICIAL ?? $empleado->cuentaInicial ?? ''), 11, '0', STR_PAD_LEFT));
+
+            // 3. Renderizar el formato correspondiente según la lógica de reposición
+            if ($tieneReposicion) {
+                // Si existe tarjeta de reposición, cargamos el formato de reposición (Hoja 3 de tu plantilla HTML o vista dedicada)
+                $pdf = Pdf::loadView('pdf.formato_reposicion', compact('empleado', 'digits'));
+            } else {
+                // Archivo inicial: Formato de entrega estándar
+                $pdf = Pdf::loadView('pdf.formatos_vales', compact('empleado', 'digits'));
+            }
+
+            $pdf->setPaper('letter', 'portrait');
+            return $pdf->stream("formatos_vales_{$numeroEmpleado}.pdf");
+        } catch (\Throwable $e) {
+            Log::error('Error al generar los formatos de entrega: ' . $e->getMessage(), [
+                'idRegister' => $idRegister
+            ]);
+
             return response()->json([
                 'status' => false,
-                'message' => 'No se encontró el registro en la base de datos.',
-            ], 404);
+                'message' => 'Ocurrió un error al generar el PDF.',
+            ], 500);
         }
-
-        $pdf = Pdf::loadView('pdf.formatos_vales', compact('empleado'));
-        $pdf->setPaper('letter', 'portrait');
-
-        $numeroEmpleado =
-            $empleado->NUMEMPLEADO
-            ?? $empleado->numempleado
-            ?? $empleado->numEmpleado
-            ?? $idRegister;
-
-        return $pdf->stream("formatos_vales_{$numeroEmpleado}.pdf");
     }
 
     public function descargarFormatoPensionados($idRegister)
@@ -470,25 +503,37 @@ class AdminController extends Controller
             }
 
             $numeroEmpleado = trim((string) ($empleado->numempleado ?? $empleado->NUMEMPLEADO ?? ''));
-            $pensionados = $empleado->pensionados()
-                ->orderBy('NOMBREPENSIONADO')
-                ->get();
+            $pensionados = Pension::where('NUMEMPLEADO', '=', $numeroEmpleado)->get();
 
-            if ($pensionados->isEmpty()) {
-                return response()->json([
-                    'status' => false,
-                    'message' => 'El empleado no tiene pensionados registrados.',
-                ], 404);
-            }
+            // Importe total asignado al empleado
+            $importeTotalEmpleado = (float) ($empleado->IMPORTE ?? $empleado->importe ?? 0);
 
-            $pdf = Pdf::loadView('pdf.formato_pensionados', compact('empleado', 'pensionados'));
-            $pdf->setPaper('letter', 'landscape');
+            // Calcular el total de los porcentajes de pensión
+            $porcentajeTotalPensiones = $pensionados->sum(function ($p) {
+                return (float) ($p->PORCENTAJE ?? $p->porcentaje ?? 0);
+            });
+
+            // Calcular el descuento total monetario para el empleado
+            $descuentoTotal = ($importeTotalEmpleado * $porcentajeTotalPensiones) / 100;
+
+            // Importe neto que le queda al empleado (Importe total menos las pensiones)
+            $importeNetoEmpleado = max(0, $importeTotalEmpleado - $descuentoTotal);
+
+            $pdf = Pdf::loadView('pdf.formato_pensionados', compact(
+                'empleado',
+                'pensionados',
+                'importeNetoEmpleado',
+                'importeTotalEmpleado' // ✅ Corregido como string
+            ));
+
+            $pdf->setPaper('letter', 'portrait');
 
             return $pdf->stream("pensionados_{$numeroEmpleado}.pdf");
         } catch (\Throwable $e) {
             Log::error('Error al generar formato de pensionados', [
                 'idRegister' => $idRegister,
                 'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
             ]);
 
             return response()->json([
@@ -638,7 +683,7 @@ class AdminController extends Controller
         $idType = (int) $tipoUsuarioActual === 1
             ? $request->integer('idtype')
             : 3;
-            
+
         User::create([
             'numEmpleado' => $request->input('numEmpleado'),
             'firstName' => trim($request->input('nomUsuario')),
@@ -983,15 +1028,15 @@ class AdminController extends Controller
             $esAdministrador = $tipoUsuario === 1;
             $origen = $esAdministrador ? 'TODOS' : $this->origenReporteDelUsuario();
             $columnas = $this->columnasReportePorOrigen($origen);
-            
+
             $registrosQuery = Register::query();
 
             if (!$esAdministrador) {
                 $registrosQuery->whereRaw('UPPER(ORIGEN) = ?', [$origen]);
             }
-            
+
             $this->filtrarRegistrosPorEnlace($registrosQuery);
-            
+
             $registros = $registrosQuery
                 ->whereRaw('EXTRACT(YEAR FROM CREATED_AT) = ?', [(int) $datos['anio']])
                 ->orderBy('IDREGISTER', 'desc')
@@ -999,15 +1044,15 @@ class AdminController extends Controller
 
             $dataFormateada = $registros->map(function ($registro) {
                 $array = $registro->toArray();
-                
+
                 $numEmpleado = trim((string)($registro->NUMEMPLEADO ?? $registro->numempleado ?? ''));
-                
+
                 $pensionados = DB::connection('oracle_primary')
                     ->table('pensiones')
                     ->where('NUMEMPLEADO', $numEmpleado)
                     ->get();
 
-                $nombresPensionados = $pensionados->map(function($p) {
+                $nombresPensionados = $pensionados->map(function ($p) {
                     return $p->NOMBREPENSIONADO ?? $p->nombrepensionado ?? $p->NOMBRE_PENSIONADO ?? null;
                 })->filter()->implode(', ');
 
@@ -1357,9 +1402,7 @@ class AdminController extends Controller
                 ], 404);
             }
 
-            $pensionados = $empleado->pensionados()
-                ->orderBy('NOMBREPENSIONADO')
-                ->get();
+            $pensionados = Pension::where('numEmpleado', '=', $empleado->numempleado)->get();
 
             $tarjetas = $conexion
                 ->table('cards as c')
