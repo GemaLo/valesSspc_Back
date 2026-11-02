@@ -440,30 +440,38 @@ class AdminController extends Controller
 
             $numeroEmpleado = trim((string) ($empleado->numempleado ?? $empleado->NUMEMPLEADO ?? $idRegister));
 
-            // 1. Verificar si el empleado cuenta con registros en la tabla de pensiones
-            $pensionados = $empleado->pensionados()->orderBy('NOMBREPENSIONADO')->get();
-            if ($pensionados->isNotEmpty()) {
-                $pdf = Pdf::loadView('pdf.formato_pensionados', compact('empleado', 'pensionados'));
-                $pdf->setPaper('letter', 'landscape');
-                return $pdf->stream("pensionados_{$numeroEmpleado}.pdf");
+            $pensionados = Pension::where('NUMEMPLEADO', '=', $numeroEmpleado)->get();
+            
+            if ($pensionados->isEmpty() && method_exists($empleado, 'pensionados')) {
+                $pensionados = $empleado->pensionados()->get();
             }
 
-            // 2. Verificar si ya existe una tarjeta de reposición asociada en la tabla 'cards'
-            // (Asumiendo que las tarjetas de reposición o adicionales se guardan vinculadas al registro)
+            $rawImporte = (float) ($empleado->IMPORTE ?? $empleado->importe ?? 0);
+            
+            if ($pensionados->isNotEmpty()) {
+                $porcentajeTotal = $pensionados->sum(function ($p) {
+                    return (float) ($p->PORCENTAJE ?? $p->porcentaje ?? 0);
+                });
+                
+                $descuento = ($rawImporte * $porcentajeTotal) / 100;
+                $rawImporte = max(0, $rawImporte - $descuento);
+            }
+            
+            $empleado->IMPORTE_NETO = $rawImporte;
+
+            if ($pensionados->isNotEmpty() && request()->route()->getActionMethod() === 'descargarFormatos') {
+            }
+
             $tieneReposicion = DB::connection('oracle_primary')
                 ->table('cards')
                 ->where('IDREGISTER', $idRegister)
                 ->exists();
 
-            // Definimos los dígitos limpios de la cuenta para la vista
             $digits = str_split(str_pad(preg_replace('/[^0-9]/', '', $empleado->CUENTAINICIAL ?? $empleado->cuentaInicial ?? ''), 11, '0', STR_PAD_LEFT));
 
-            // 3. Renderizar el formato correspondiente según la lógica de reposición
             if ($tieneReposicion) {
-                // Si existe tarjeta de reposición, cargamos el formato de reposición (Hoja 3 de tu plantilla HTML o vista dedicada)
                 $pdf = Pdf::loadView('pdf.formato_reposicion', compact('empleado', 'digits'));
             } else {
-                // Archivo inicial: Formato de entrega estándar
                 $pdf = Pdf::loadView('pdf.formatos_vales', compact('empleado', 'digits'));
             }
 
@@ -480,7 +488,7 @@ class AdminController extends Controller
             ], 500);
         }
     }
-
+    
     public function descargarFormatoPensionados($idRegister)
     {
         if (!$idRegister || $idRegister === 'undefined') {
@@ -523,7 +531,7 @@ class AdminController extends Controller
                 'empleado',
                 'pensionados',
                 'importeNetoEmpleado',
-                'importeTotalEmpleado' // ✅ Corregido como string
+                'importeTotalEmpleado'
             ));
 
             $pdf->setPaper('letter', 'portrait');
@@ -1175,7 +1183,6 @@ class AdminController extends Controller
             $columnas[] = ['key' => 'PENSION', 'label' => 'Pensión alimenticia'];
         }
 
-        // Modificado para que aparezcan SOLAMENTE si el origen es estrictamente 'GN'
         if ($origen === 'GN') {
             $columnas[] = ['key' => 'PUESTO', 'label' => 'Puesto'];
             $columnas[] = ['key' => 'UBICACION', 'label' => 'Ubicación física'];

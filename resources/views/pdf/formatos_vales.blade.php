@@ -45,10 +45,25 @@
     $unidad         = $empleado->UR ?? $empleado->unidad ?? '-';
     $rfc            = $empleado->RFC ?? $empleado->rfc ?? '-';
     
-    $rawImporte     = $empleado->IMPORTE ?? $empleado->importe ?? null;
-    $importe        = ($rawImporte !== null && is_numeric($rawImporte)) 
-        ? '$' . number_format((float)$rawImporte, 2, '.', ',') 
-        : (!empty($rawImporte) ? $rawImporte : '-');
+    // Cálculo de importe neto considerando el descuento de pensiones (si aplica)
+    
+    // Cálculo del importe considerando pensiones
+    $rawImporte = (float) (
+        $empleado->IMPORTE ??
+        $empleado->importe ??
+        0
+    );
+
+    // Si el controlador ya calculó el importe neto,
+    // conservar ese valor para empleados sin pensiones.
+    if (isset($empleado->IMPORTE_NETO)) {
+        $rawImporte = (float) $empleado->IMPORTE_NETO;
+    }
+
+
+    $importe = $rawImporte > 0 
+        ? '$' . number_format($rawImporte, 2, '.', ',') 
+        : '-';
 
     $telefono       = $empleado->TELEFONO ?? $empleado->telefono ?? '';
     $correo         = $empleado->CORREO ?? $empleado->correo ?? '';
