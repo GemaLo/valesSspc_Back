@@ -6,14 +6,18 @@ use App\Models\User;
 use App\Models\Card;
 use App\Models\Pension;
 use App\Models\Register;
+use App\Models\Document;
 use Illuminate\Http\Request;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use Yajra\DataTables\Facades\DataTables;
+use PhpOffice\PhpWord\TemplateProcessor;
+use Luecano\NumeroALetras\NumeroALetras;
 
 class AdminController extends Controller
 {
@@ -441,62 +445,83 @@ class AdminController extends Controller
             $numeroEmpleado = trim((string) ($empleado->numempleado ?? $empleado->NUMEMPLEADO ?? $idRegister));
 
             $pensionados = Pension::where('NUMEMPLEADO', '=', $numeroEmpleado)->get();
-            
-            // Si la relación del modelo Register ya está definida, también puedes usar $empleado->pensionados
+
             if ($pensionados->isEmpty() && method_exists($empleado, 'pensionados')) {
                 $pensionados = $empleado->pensionados()->get();
             }
 
-            // Calcular importe neto si tiene pensiones registradas
             $rawImporte = (float) ($empleado->IMPORTE ?? $empleado->importe ?? 0);
-            
+
             if ($pensionados->isNotEmpty()) {
                 $porcentajeTotal = $pensionados->sum(function ($p) {
                     return (float) ($p->PORCENTAJE ?? $p->porcentaje ?? 0);
                 });
-                
+
                 $descuento = ($rawImporte * $porcentajeTotal) / 100;
                 $rawImporte = max(0, $rawImporte - $descuento);
             }
-            
+
             $empleado->IMPORTE_NETO = $rawImporte;
 
-            if ($pensionados->isNotEmpty() && request()->route()->getActionMethod() === 'descargarFormatos') {
+            $templatePath = storage_path('app/templates/formato_entrega.docx');
+
+            if (!file_exists($templatePath)) {
+                throw new \Exception('La plantilla de Word no existe en el servidor.');
             }
 
-            $tieneReposicion = DB::connection('oracle_primary')
-                ->table('cards')
-                ->where('IDREGISTER', $idRegister)
-                ->exists();
+            $templateProcessor = new TemplateProcessor($templatePath);
 
-            $digits = str_split(str_pad(preg_replace('/[^0-9]/', '', $empleado->CUENTAINICIAL ?? $empleado->cuentaInicial ?? ''), 11, '0', STR_PAD_LEFT));
+            $importeNeto = $empleado->IMPORTE_NETO;
 
-            if ($tieneReposicion) {
-                $pdf = Pdf::loadView('pdf.formato_reposicion', compact('empleado', 'digits'));
-            } else {
-                $pdf = Pdf::loadView('pdf.formatos_vales', compact('empleado', 'digits'));
+            $formatter = new NumeroALetras();
+
+            $importeEnLetra = $formatter->toMoney($importeNeto, 2, 'PESOS', 'CENTAVOS');
+
+            $templateProcessor->setValue('cuenta', $empleado->CUENTAINICIAL ?? $empleado->cuentaInicial ?? $empleado->cuentainicial ?? 'N/A');
+            $templateProcessor->setValue('importe', number_format($importeNeto, 2, '.', ','));
+            $templateProcessor->setValue('importe_letra', mb_strtoupper($importeEnLetra));
+
+            $templateProcessor->setValue('nombreCompleto', $empleado->nombrecompleto ?? $empleado->nombre ?? 'N/A');
+            $templateProcessor->setValue('numEmpleado', $numeroEmpleado);
+            $templateProcessor->setValue('nombreBeneficiario', $empleado->NOMBRE_BENEFICIARIO ?? '________________________________________');
+            $templateProcessor->setValue('enlace', $empleado->idenlace ?? 'NOMBRE DEL ENLACE');
+
+            $templateProcessor->setValue('dia', date('d'));
+            $templateProcessor->setValue('mes', date('m'));
+            $templateProcessor->setValue('anio', date('Y'));
+
+            $rfc = strtoupper(trim($empleado->rfc ?? ''));
+            $charsRfc = str_pad($rfc, 13, ' ', STR_PAD_RIGHT);
+
+            for ($i = 0; $i < 13; $i++) {
+                $templateProcessor->setValue("r{$i}", $charsRfc[$i]);
             }
 
-            $pdf->setPaper('letter', 'portrait');
-            return $pdf->stream("formatos_vales_{$numeroEmpleado}.pdf");
+            $fileName = "formato_entrega_{$numeroEmpleado}.docx";
+            $tempFile = storage_path("app/public/{$fileName}");
+
+            $templateProcessor->saveAs($tempFile);
+
+            return response()->download($tempFile)->deleteFileAfterSend(true);
         } catch (\Throwable $e) {
-            Log::error('Error al generar los formatos de entrega: ' . $e->getMessage(), [
+            Log::error('Error al generar el formato Word de entrega: ' . $e->getMessage(), [
                 'idRegister' => $idRegister
             ]);
 
             return response()->json([
                 'status' => false,
-                'message' => 'Ocurrió un error al generar el PDF.',
+                'message' => 'Ocurrió un error al generar el documento Word.',
             ], 500);
         }
     }
-    
-    public function descargarFormatoPensionados($idRegister)
+
+
+    public function descargarFormatoPensionadoIndividual($idRegister, $idPension)
     {
-        if (!$idRegister || $idRegister === 'undefined') {
+        if (!$idRegister || $idRegister === 'undefined' || !$idPension) {
             return response()->json([
                 'status' => false,
-                'message' => 'El ID del registro es inválido.',
+                'message' => 'Los parámetros proporcionados son inválidos.',
             ], 400);
         }
 
@@ -513,42 +538,75 @@ class AdminController extends Controller
             }
 
             $numeroEmpleado = trim((string) ($empleado->numempleado ?? $empleado->NUMEMPLEADO ?? ''));
-            $pensionados = Pension::where('NUMEMPLEADO', '=', $numeroEmpleado)->get();
 
-            // Importe total asignado al empleado
+            $pensionadoEspecifico = Pension::where('NUMEMPLEADO', '=', $numeroEmpleado)
+                ->where('IDPENSION', $idPension)
+                ->first();
+
+            if (!$pensionadoEspecifico) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'No se encontró el registro del pensionado.',
+                ], 404);
+            }
+
             $importeTotalEmpleado = (float) ($empleado->IMPORTE ?? $empleado->importe ?? 0);
+            $porcentajePension = (float) ($pensionadoEspecifico->PORCENTAJE ?? $pensionadoEspecifico->porcentaje ?? 0);
 
-            // Calcular el total de los porcentajes de pensión
-            $porcentajeTotalPensiones = $pensionados->sum(function ($p) {
-                return (float) ($p->PORCENTAJE ?? $p->porcentaje ?? 0);
-            });
+            $descuentoIndividual = ($importeTotalEmpleado * $porcentajePension) / 100;
+            $importeNetoPensionado = max(0, $importeTotalEmpleado - $descuentoIndividual);
 
-            // Calcular el descuento total monetario para el empleado
-            $descuentoTotal = ($importeTotalEmpleado * $porcentajeTotalPensiones) / 100;
+            $templatePath = storage_path('app/templates/formato_pensionados.docx');
 
-            // Importe neto que le queda al empleado (Importe total menos las pensiones)
-            $importeNetoEmpleado = max(0, $importeTotalEmpleado - $descuentoTotal);
+            if (!file_exists($templatePath)) {
+                throw new \Exception('La plantilla de Word para pensionados no existe en el servidor.');
+            }
 
-            $pdf = Pdf::loadView('pdf.formato_pensionados', compact(
-                'empleado',
-                'pensionados',
-                'importeNetoEmpleado',
-                'importeTotalEmpleado'
-            ));
+            $templateProcessor = new TemplateProcessor($templatePath);
 
-            $pdf->setPaper('letter', 'portrait');
+            $formatter = new NumeroALetras();
+            $importeEnLetra = $formatter->toMoney($descuentoIndividual, 2, 'PESOS', 'CENTAVOS');
 
-            return $pdf->stream("pensionados_{$numeroEmpleado}.pdf");
+            $templateProcessor->setValue('cuenta', $empleado->CUENTAINICIAL ?? $empleado->cuentaInicial ?? 'N/A');
+            $templateProcessor->setValue('importe', number_format($descuentoIndividual, 2, '.', ','));
+            $templateProcessor->setValue('importe_letra', mb_strtoupper($importeEnLetra));
+
+            $templateProcessor->setValue('nombreCompleto', $empleado->nombrecompleto ?? $empleado->nombre ?? 'N/A');
+            $templateProcessor->setValue('numEmpleado', $numeroEmpleado);
+            $templateProcessor->setValue('correo', $empleado->CORREO ?? 'N/A');
+            $templateProcessor->setValue('telefono', $empleado->TELEFONO ?? 'N/A');
+            $templateProcessor->setValue('enlace', $empleado->idenlace ?? 'NOMBRE DEL ENLACE');
+
+            $templateProcessor->setValue('pensionado_porcentaje', $porcentajePension);
+            $templateProcessor->setValue('pensionado_nombre', $pensionadoEspecifico->NOMBREPENSIONADO ?? $pensionadoEspecifico->nombrepensionado ?? 'N/A');
+
+            $templateProcessor->setValue('dia', date('d'));
+            $templateProcessor->setValue('mes', date('m'));
+            $templateProcessor->setValue('anio', date('Y'));
+
+            $rfc = strtoupper(trim($empleado->RFC ?? ''));
+            $charsRfc = str_pad($rfc, 13, ' ', STR_PAD_RIGHT);
+
+            for ($i = 0; $i < 13; $i++) {
+                $templateProcessor->setValue("r{$i}", $charsRfc[$i]);
+            }
+
+            $fileName = "pensionado_{$idPension}_{$numeroEmpleado}.docx";
+            $tempFile = storage_path("app/public/{$fileName}");
+
+            $templateProcessor->saveAs($tempFile);
+
+            return response()->download($tempFile)->deleteFileAfterSend(true);
         } catch (\Throwable $e) {
-            Log::error('Error al generar formato de pensionados', [
+            Log::error('Error al generar formato Word del pensionado individual', [
                 'idRegister' => $idRegister,
+                'idPension' => $idPension,
                 'message' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
             ]);
 
             return response()->json([
                 'status' => false,
-                'message' => 'No se pudo generar el PDF de pensionados.',
+                'message' => 'No se pudo generar el documento Word del pensionado.',
             ], 500);
         }
     }
@@ -1495,6 +1553,105 @@ class AdminController extends Controller
             return response()->json([
                 'status' => false,
                 'message' => 'Ocurrió un error al guardar la observación.',
+            ], 500);
+        }
+    }
+    // Agrega estas importaciones en la parte superior de AdminController.php si no existen:
+
+
+// ... dentro de class AdminController extends Controller
+
+    /**
+     * Cargar / Guardar un documento anexo para un registro
+     */
+    public function guardarDocumentoAnexo(Request $request)
+    {
+        $request->validate([
+            'idRegister'     => 'required|integer',
+            'idTypeDocument' => 'required|integer', // Valida que sea estrictamente un entero
+            'archivo'        => 'required|file|mimes:pdf,jpg,jpeg,png,doc,docx|max:10240',
+        ]);
+
+        try {
+            $file = $request->file('archivo');
+            $path = $file->store('documentos', 'public');
+
+            $documento = Document::create([
+                'document'       => $path,
+                'idTypeDocument' => (int) $request->input('idTypeDocument'), // Forzar conversión a entero
+                'idRegister'     => (int) $request->input('idRegister'),     // Forzar conversión a entero
+                'status'         => 1,
+            ]);
+
+            return response()->json([
+                'status'  => true,
+                'message' => 'Documento anexo clasificado y guardado correctamente.',
+                'data'    => $documento,
+            ], 201);
+        } catch (\Throwable $e) {
+            Log::error('Error al guardar documento anexo: ' . $e->getMessage());
+
+            return response()->json([
+                'status'  => false,
+                'message' => 'Error al guardar el documento: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+    /**
+     * Obtener listado de documentos anexos de un registro
+     */
+    public function obtenerDocumentos($idRegister)
+    {
+        try {
+            $documentos = Document::where('idRegister', $idRegister)
+                ->where('status', 1)
+                ->get()
+                ->map(function ($doc) {
+                    // Generar URL accesible
+                    $doc->url = Storage::disk('public')->url($doc->document);
+                    return $doc;
+                });
+
+            return response()->json([
+                'status' => true,
+                'data'   => $documentos,
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Error al obtener documentos: ' . $e->getMessage());
+
+            return response()->json([
+                'status'  => false,
+                'message' => 'Error al consultar documentos.',
+            ], 500);
+        }
+    }
+
+    /**
+     * Eliminar un documento anexo antes o después de definirlo
+     */
+    public function eliminarDocumento($idDocument)
+    {
+        try {
+            $documento = Document::findOrFail($idDocument);
+
+            // Eliminar del almacenamiento
+            if (Storage::disk('public')->exists($documento->document)) {
+                Storage::disk('public')->delete($documento->document);
+            }
+
+            // Eliminar el registro
+            $documento->delete();
+
+            return response()->json([
+                'status'  => true,
+                'message' => 'Documento eliminado correctamente.',
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Error al eliminar documento: ' . $e->getMessage());
+
+            return response()->json([
+                'status'  => false,
+                'message' => 'Error al eliminar el documento.',
             ], 500);
         }
     }

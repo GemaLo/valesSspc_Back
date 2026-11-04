@@ -188,7 +188,6 @@ class GestorController extends Controller
                 $pensionado['numEmpleado'] = trim($pensionado['numEmpleado']);
                 $pensionado['nomEmpleado'] = trim((string) ($pensionado['nomEmpleado'] ?? ''));
                 $pensionado['nombrePensionado'] = trim($pensionado['nombrePensionado']);
-                // Limpiamos y convertimos a mayúsculas de forma segura si vienen vacíos
                 $pensionado['curp'] = strtoupper(trim((string) ($pensionado['curp'] ?? '')));
                 $pensionado['rfc'] = strtoupper(trim((string) ($pensionado['rfc'] ?? '')));
                 return $pensionado;
@@ -235,7 +234,6 @@ class GestorController extends Controller
                     $empleado = $empleados->first();
                     $nombreEmpleado = '';
 
-                    // Puede haber varios registros del mismo empleado; toma el primero que tenga nombre.
                     foreach ($empleados as $empleadoCandidato) {
                         $nombreCandidato = trim((string) ($empleadoCandidato->NOMBRECOMPLETO ?? ''));
                         if ($nombreCandidato === '') {
@@ -269,33 +267,30 @@ class GestorController extends Controller
 
                     $cuenta = trim((string) ($empleado->CUENTAINICIAL ?? '')) ?: 'N/A';
 
-                    // La carga reemplaza los detalles anteriores para evitar duplicarlos.
                     Pension::query()->where('numEmpleado', $numeroEmpleado)->delete();
 
-                    // Usamos la CURP si existe; si está vacía, usamos el nombre del pensionado para evitar colisiones de filas únicas
                     $filasUnicas = $filas->unique(
                         fn(array $fila) => ($fila['curp'] !== '' ? $fila['curp'] : $fila['nombrePensionado']) . '|' . $fila['porcentaje']
                     )->values();
 
-foreach ($filasUnicas as $fila) {
-        Pension::create([
-            'NUMEMPLEADO'      => $numeroEmpleado,
-            'NOMEMPLEADO'      => $nombreEmpleado,
-            'NOMBREPENSIONADO' => $fila['nombrePensionado'], // 👈 En mayúsculas
-            'CURP'             => $fila['curp'] !== '' ? $fila['curp'] : null,
-            'RFC'              => $fila['rfc'] !== '' ? $fila['rfc'] : null,
-            'CUENTA'           => $cuenta,
-            'PORCENTAJE'       => (int) $fila['porcentaje'],
-        ]);
-    }
+                    foreach ($filasUnicas as $fila) {
+                        Pension::create([
+                            'NUMEMPLEADO'      => $numeroEmpleado,
+                            'NOMEMPLEADO'      => $nombreEmpleado,
+                            'NOMBREPENSIONADO' => $fila['nombrePensionado'],
+                            'CURP'             => $fila['curp'] !== '' ? $fila['curp'] : null,
+                            'RFC'              => $fila['rfc'] !== '' ? $fila['rfc'] : null,
+                            'CUENTA'           => $cuenta,
+                            'PORCENTAJE'       => (int) $fila['porcentaje'],
+                        ]);
+                    }
 
                     $cantidadPensionados = $filasUnicas->map(
                         fn($fila) =>
                         $fila['curp'] !== '' ? $fila['curp'] : $fila['nombrePensionado']
                     )->unique()->count();
 
-                    $resumen = 'SI (' . $cantidadPensionados . ' pensionado'
-                        . ($cantidadPensionados === 1 ? '' : 's') . ')';
+                    $resumen = 'SI';
 
                     $registrosActualizados = DB::connection('oracle_primary')
                         ->table('registers')
@@ -333,7 +328,7 @@ foreach ($filasUnicas as $fila) {
                 'sinRegistro' => $sinRegistro,
                 'sinNombre' => $sinNombre,
             ]);
-} catch (\Throwable $e) {
+        } catch (\Throwable $e) {
             report($e);
 
             return response()->json([
