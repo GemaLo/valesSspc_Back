@@ -60,4 +60,5 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/lineamientos/descargar', [AdminController::class, 'descargarLineamientos']);
     Route::get('/admin/reportes/exportar-excel', [AdminController::class, 'exportarReporteExcel']);
     Route::patch('/admin/documentos/{idDocument}/estatus', [AdminController::class, 'actualizarEstatusDocumento']);
+    Route::get('/gestor/documentos/{id}/ver', [AdminController::class, 'verDocumento'])->name('documentos.ver');
 });

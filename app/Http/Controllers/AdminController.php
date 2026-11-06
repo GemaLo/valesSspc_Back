@@ -1570,8 +1570,8 @@ class AdminController extends Controller
 
             $documento = Document::create([
                 'document'       => $path,
-                'idTypeDocument' => (int) $request->input('idTypeDocument'), 
-                'idRegister'     => (int) $request->input('idRegister'),     
+                'idTypeDocument' => (int) $request->input('idTypeDocument'),
+                'idRegister'     => (int) $request->input('idRegister'),
                 'status'         => null,
             ]);
 
@@ -1589,13 +1589,21 @@ class AdminController extends Controller
             ], 500);
         }
     }
+    /**
+     * 1. Método para obtener la lista de documentos del registro.
+     */
     public function obtenerDocumentos($idRegister)
     {
         try {
             $documentos = Document::where('idRegister', $idRegister)
                 ->get()
                 ->map(function ($doc) {
-                    $doc->url = request()->getSchemeAndHttpHost() . Storage::url($doc->document);
+                    // Generamos una ruta o identificador seguro para la segunda función
+                    $docId = $doc->idDocument ?? $doc->iddocument ?? $doc->IDDOCUMENT;
+                    
+                    // Puedes retornar una ruta limpia hacia tu nuevo endpoint de visualización
+                    $doc->url = route('documentos.ver', ['id' => $docId]); 
+                    
                     return $doc;
                 });
 
@@ -1604,7 +1612,47 @@ class AdminController extends Controller
                 'data'   => $documentos,
             ]);
         } catch (\Throwable $e) {
-            // ...
+            Log::error('Error al obtener los documentos: ' . $e->getMessage());
+
+            return response()->json([
+                'status' => false,
+                'message' => 'Ocurrió un error al obtener los documentos.',
+            ], 500);
+        }
+    }
+
+    /**
+     * 2. Método independiente para visualizar/renderizar el archivo en el navegador.
+     */
+public function verDocumento($id)
+    {
+        try {
+            $doc = Document::find($id);
+
+            if (!$doc || !Storage::disk('public')->exists($doc->document)) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'El archivo no se encuentra en el servidor.',
+                ], 404);
+            }
+
+            $filePath = Storage::disk('public')->path($doc->document);
+            
+            // Detectamos el tipo MIME real del archivo (ej. application/pdf, image/jpeg, etc.)
+            $mimeType = mime_content_type($filePath) ?: 'application/pdf';
+
+            // Usamos response()->file con la cabecera 'inline' implícita 
+            return response()->file($filePath, [
+                'Content-Type' => $mimeType,
+                'Content-Disposition' => 'inline; filename="' . basename($filePath) . '"'
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Error al visualizar el documento: ' . $e->getMessage());
+
+            return response()->json([
+                'status' => false,
+                'message' => 'Ocurrió un error al cargar el archivo.',
+            ], 500);
         }
     }
 
@@ -1763,7 +1811,6 @@ class AdminController extends Controller
             $formatter = new NumeroALetras();
             $importeEnLetra = $formatter->toMoney($rawImporte, 2, 'PESOS', 'CENTAVOS');
 
-            // Asignación de variables del empleado y cuenta
             $templateProcessor->setValue('cuenta', $empleado->CUENTAINICIAL ?? $empleado->cuentaInicial ?? $empleado->cuentainicial ?? 'N/A');
             $templateProcessor->setValue('importe', number_format($rawImporte, 2, '.', ','));
             $templateProcessor->setValue('importe_letra', mb_strtoupper($importeEnLetra));
@@ -1772,16 +1819,12 @@ class AdminController extends Controller
             $templateProcessor->setValue('numEmpleado', $numeroEmpleado);
             $templateProcessor->setValue('enlace', $empleado->idenlace ?? 'NOMBRE DEL ENLACE');
 
-            // Asignación de variables de la persona beneficiaria / autorizada
-            // Asignación de variables de la persona beneficiaria / autorizada
             $nombrePersona = trim(($persona->nomperson ?? '') . ' ' . ($persona->appperson ?? '') . ' ' . ($persona->apmperson ?? ''));
 
-            // Usa 'nombreBeneficiario' para que coincida con la plantilla Word
             $templateProcessor->setValue('nombreBeneficiario', $nombrePersona !== '' ? $nombrePersona : '________________________________________');
             $templateProcessor->setValue('curpPersona', $persona->curp ?? 'N/A');
             $templateProcessor->setValue('rfcPersona', $persona->rfc ?? 'N/A');
 
-            // Fechas
             $templateProcessor->setValue('dia', date('d'));
             $templateProcessor->setValue('mes', date('m'));
             $templateProcessor->setValue('anio', date('Y'));
@@ -1805,27 +1848,28 @@ class AdminController extends Controller
             ], 500);
         }
     }
+
     public function descargarLineamientos()
     {
         try {
-            $filePath = storage_path('app/public/Lineamientos_medida_fin.pdf');
-
-            if (!file_exists($filePath)) {
+            if (!Storage::disk('public')->exists('Lineamientos_medida_fin.pdf')) {
                 return response()->json([
                     'status' => false,
                     'message' => 'El archivo de lineamientos no se encuentra en el servidor.',
                 ], 404);
             }
 
-            return response()->download($filePath, 'Lineamientos_medida_fin.pdf', [
+            $filePath = Storage::disk('public')->path('Lineamientos_medida_fin.pdf');
+
+            return response()->file($filePath, [
                 'Content-Type' => 'application/pdf',
             ]);
         } catch (\Throwable $e) {
-            Log::error('Error al descargar los lineamientos: ' . $e->getMessage());
+            Log::error('Error al visualizar los lineamientos: ' . $e->getMessage());
 
             return response()->json([
                 'status' => false,
-                'message' => 'Ocurrió un error al descargar el archivo de lineamientos.',
+                'message' => 'Ocurrió un error al cargar el archivo de lineamientos.',
             ], 500);
         }
     }
@@ -1922,7 +1966,7 @@ class AdminController extends Controller
                 $nombreRecortado21 = mb_substr($nombreCompletoTotal, 0, 21);
 
                 $estatusVal = (string)($registro->IDSTATUS ?? $registro->idstatus ?? '');
-                $estatusNombre = match($estatusVal) {
+                $estatusNombre = match ($estatusVal) {
                     '1' => 'Pendiente',
                     '2' => 'Entregada',
                     '3' => 'Sustituida',
@@ -1982,7 +2026,6 @@ class AdminController extends Controller
             $writer->save($tempFile);
 
             return response()->download($tempFile)->deleteFileAfterSend(true);
-
         } catch (\Throwable $e) {
             Log::error('Error al exportar reporte Excel con columnas adicionales: ' . $e->getMessage());
             return response()->json([
@@ -2029,46 +2072,46 @@ class AdminController extends Controller
             'apellido_materno' => '',
         ];
     }
-public function actualizarEstatusDocumento(Request $request, $idDocument)
-{
-    $request->validate([
-        'status' => 'required|integer|in:0,1',
-    ]);
+    public function actualizarEstatusDocumento(Request $request, $idDocument)
+    {
+        $request->validate([
+            'status' => 'required|integer|in:0,1',
+        ]);
 
-    try {
-        // Usamos el Query Builder para asegurar el mapeo exacto con las columnas de Oracle (en mayúsculas)
-        $afectados = DB::connection('oracle_primary')
-            ->table('documents') // O el nombre real de tu tabla
-            ->where('IDDOCUMENT', $idDocument)
-            ->update([
-                'STATUS' => (int) $request->input('status'),
-                'UPDATED_AT' => now() // Si manejas fecha de actualización
+        try {
+            // Usamos el Query Builder para asegurar el mapeo exacto con las columnas de Oracle (en mayúsculas)
+            $afectados = DB::connection('oracle_primary')
+                ->table('documents') // O el nombre real de tu tabla
+                ->where('IDDOCUMENT', $idDocument)
+                ->update([
+                    'STATUS' => (int) $request->input('status'),
+                    'UPDATED_AT' => now() // Si manejas fecha de actualización
+                ]);
+
+            if ($afectados === 0) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'No se encontró el documento especificado.',
+                ], 404);
+            }
+
+            $documentoActualizado = DB::connection('oracle_primary')
+                ->table('documents')
+                ->where('IDDOCUMENT', $idDocument)
+                ->first();
+
+            return response()->json([
+                'status' => true,
+                'message' => 'Estatus del documento actualizado correctamente.',
+                'data' => $documentoActualizado,
             ]);
+        } catch (\Throwable $e) {
+            Log::error('Error al actualizar estatus de documento: ' . $e->getMessage());
 
-        if ($afectados === 0) {
             return response()->json([
                 'status' => false,
-                'message' => 'No se encontró el documento especificado.',
-            ], 404);
+                'message' => 'Error al actualizar el estatus del documento.',
+            ], 500);
         }
-
-        $documentoActualizado = DB::connection('oracle_primary')
-            ->table('documents')
-            ->where('IDDOCUMENT', $idDocument)
-            ->first();
-
-        return response()->json([
-            'status' => true,
-            'message' => 'Estatus del documento actualizado correctamente.',
-            'data' => $documentoActualizado,
-        ]);
-    } catch (\Throwable $e) {
-        Log::error('Error al actualizar estatus de documento: ' . $e->getMessage());
-
-        return response()->json([
-            'status' => false,
-            'message' => 'Error al actualizar el estatus del documento.',
-        ], 500);
     }
-}
 }
