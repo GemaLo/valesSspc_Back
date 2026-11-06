@@ -57,4 +57,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/gestor/tarjetas/personas/{idRegister}', [AdminController::class, 'obtenerPersonasBeneficiarias']);
     Route::post('/gestor/tarjetas/personas', [AdminController::class, 'guardarPersonaBeneficiaria']);
     Route::get('/gestor/tarjetas/formato-persona/{idRegister}/{idPerson}', [AdminController::class, 'descargarFormatoPersonaIndividual']);
+    Route::get('/lineamientos/descargar', [AdminController::class, 'descargarLineamientos']);
+    Route::get('/admin/reportes/exportar-excel', [AdminController::class, 'exportarReporteExcel']);
 });

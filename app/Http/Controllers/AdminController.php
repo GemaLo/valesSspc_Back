@@ -632,11 +632,11 @@ class AdminController extends Controller
 
         if ($request->input('origen') === 'guardia') {
             $conexion = 'gnnomina';
-            $tabla = 'EMPLEADOS_VIATICOS_GN';
+            $tabla = 'EMPLEADOS_PRESTACIONES_GN';
             $fuente = 'Guardia Nacional';
         } else {
             $conexion = 'oracle_secondary';
-            $tabla = 'EMPLEADOS_VIATICOS';
+            $tabla = 'EMPLEADOS_PRESTACIONES';
             $fuente = 'la Secretaría';
         }
 
@@ -1824,5 +1824,229 @@ class AdminController extends Controller
                 'message' => 'No se pudo generar el documento Word.',
             ], 500);
         }
+    }
+    public function descargarLineamientos()
+    {
+        try {
+            $filePath = storage_path('app/public/Lineamientos_medida_fin.pdf');
+
+            if (!file_exists($filePath)) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'El archivo de lineamientos no se encuentra en el servidor.',
+                ], 404);
+            }
+
+            return response()->download($filePath, 'Lineamientos_medida_fin.pdf', [
+                'Content-Type' => 'application/pdf',
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Error al descargar los lineamientos: ' . $e->getMessage());
+
+            return response()->json([
+                'status' => false,
+                'message' => 'Ocurrió un error al descargar el archivo de lineamientos.',
+            ], 500);
+        }
+    }
+    public function exportarReporteExcel(Request $request)
+    {
+        $request->validate([
+            'anio' => ['required', 'integer', 'min:2000', 'max:2100'],
+            'estatus' => ['nullable', 'string'],
+            'enlace' => ['nullable', 'string'],
+            'origen' => ['nullable', 'string'],
+            'ur' => ['nullable', 'string'],
+        ]);
+
+        try {
+            $anio = $request->input('anio');
+            $usuario = Auth::user();
+            $tipoUsuario = (int) ($usuario->idType ?? $usuario->idtype ?? $usuario->IDTYPE ?? 0);
+            $esAdministrador = $tipoUsuario === 1;
+            $origenUsuario = $esAdministrador ? 'TODOS' : $this->origenReporteDelUsuario();
+
+            $registrosQuery = Register::query();
+
+            if (!$esAdministrador) {
+                $registrosQuery->whereRaw('UPPER(ORIGEN) = ?', [$origenUsuario]);
+            }
+
+            $this->filtrarRegistrosPorEnlace($registrosQuery);
+
+            $registros = $registrosQuery
+                ->whereRaw('EXTRACT(YEAR FROM CREATED_AT) = ?', [(int) $anio])
+                ->orderBy('IDREGISTER', 'desc')
+                ->get();
+
+            if ($request->filled('estatus')) {
+                $registros = $registros->filter(fn($r) => (string)($r->IDSTATUS ?? $r->idstatus) === $request->input('estatus'));
+            }
+            if ($request->filled('enlace')) {
+                $registros = $registros->filter(fn($r) => trim((string)($r->IDENLACE ?? $r->idenlace)) === $request->input('enlace'));
+            }
+            if ($request->filled('origen')) {
+                $registros = $registros->filter(fn($r) => strtoupper(trim((string)($r->ORIGEN ?? $r->origen))) === strtoupper($request->input('origen')));
+            }
+            if ($request->filled('ur')) {
+                $registros = $registros->filter(fn($r) => trim((string)($r->UR ?? $r->ur)) === $request->input('ur'));
+            }
+
+            $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+            $sheet = $spreadsheet->getActiveSheet();
+
+            $headers = [
+                'ID de registro',
+                'Número de empleado',
+                'Apellido Paterno',
+                'Apellido Materno',
+                'Nombre(s)',
+                'Nombre Completo',
+                'Nombre Recortado (21 car.)',
+                'UR',
+                'RFC',
+                'CURP',
+                'NSS',
+                'Nivel',
+                'Enlace',
+                'Cuenta asignada',
+                'Estatus',
+                'Fecha de registro',
+            ];
+
+            if ($esAdministrador) {
+                $headers[] = 'Origen del registro';
+            }
+            $headers[] = 'Pensión alimenticia';
+
+            $sheet->fromArray([$headers], NULL, 'A1');
+
+            $rowNum = 2;
+            foreach ($registros as $registro) {
+                $numEmpleado = trim((string)($registro->NUMEMPLEADO ?? $registro->numempleado ?? ''));
+                $origenReg = strtoupper(trim((string)($registro->ORIGEN ?? $registro->origen ?? 'SC')));
+
+                $nombreDatos = $this->consultarNombresDesdeOrigen($numEmpleado, $origenReg);
+
+                $nombres = trim($nombreDatos['nombre'] ?? '');
+                $paterno = trim($nombreDatos['apellido_paterno'] ?? '');
+                $materno = trim($nombreDatos['apellido_materno'] ?? '');
+
+                // Construir el nombre completo combinado
+                $nombreCompletoTotal = trim("{$paterno} {$materno} {$nombres}");
+                if ($nombreCompletoTotal === '') {
+                    $nombreCompletoTotal = trim((string)($registro->NOMBRECOMPLETO ?? $registro->nombrecompleto ?? ''));
+                }
+
+                // Recortar a 21 caracteres exactos
+                $nombreRecortado21 = mb_substr($nombreCompletoTotal, 0, 21);
+
+                $estatusVal = (string)($registro->IDSTATUS ?? $registro->idstatus ?? '');
+                $estatusNombre = match($estatusVal) {
+                    '1' => 'Pendiente',
+                    '2' => 'Entregada',
+                    '3' => 'Sustituida',
+                    '4' => 'Cancelada',
+                    default => $estatusVal ?: '—'
+                };
+
+                $fechaReg = $registro->CREATED_AT ?? $registro->created_at ?? '';
+                $fechaFormat = $fechaReg ? date('d/m/Y', strtotime($fechaReg)) : '—';
+
+                $pensionados = DB::connection('oracle_primary')
+                    ->table('pensiones')
+                    ->where('NUMEMPLEADO', $numEmpleado)
+                    ->get();
+                $nombresPensionados = $pensionados->map(function ($p) {
+                    return $p->NOMBREPENSIONADO ?? $p->nombrepensionado ?? $p->NOMBRE_PENSIONADO ?? null;
+                })->filter()->implode(', ');
+                $pensionStr = $nombresPensionados !== '' ? $nombresPensionados : 'N/A';
+
+                $rowData = [
+                    $registro->IDREGISTER ?? $registro->idregister ?? '',
+                    $numEmpleado,
+                    $paterno,
+                    $materno,
+                    $nombres,
+                    $nombreCompletoTotal,
+                    $nombreRecortado21,
+                    $registro->UR ?? $registro->ur ?? '',
+                    $registro->RFC ?? $registro->rfc ?? '',
+                    $registro->CURP ?? $registro->curp ?? '',
+                    $registro->NSS ?? $registro->nss ?? '',
+                    $registro->NIVEL ?? $registro->nivel ?? '',
+                    $registro->IDENLACE ?? $registro->idenlace ?? '',
+                    $registro->CUENTAINICIAL ?? $registro->cuentainicial ?? '',
+                    $estatusNombre,
+                    $fechaFormat,
+                ];
+
+                if ($esAdministrador) {
+                    $origenTexto = $origenReg === 'SC' ? 'Sector Central (SSPC)' : ($origenReg === 'GN' ? 'Guardia Nacional' : $origenReg);
+                    $rowData[] = $origenTexto;
+                }
+                $rowData[] = $pensionStr;
+
+                $sheet->fromArray([$rowData], NULL, 'A' . $rowNum);
+                $rowNum++;
+            }
+
+            foreach (range('A', $sheet->getHighestColumn()) as $col) {
+                $sheet->getColumnDimension($col)->setAutoSize(true);
+            }
+
+            $fileName = "reporte_empleados_{$anio}.xlsx";
+            $tempFile = storage_path("app/public/{$fileName}");
+
+            $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+            $writer->save($tempFile);
+
+            return response()->download($tempFile)->deleteFileAfterSend(true);
+
+        } catch (\Throwable $e) {
+            Log::error('Error al exportar reporte Excel con columnas adicionales: ' . $e->getMessage());
+            return response()->json([
+                'status' => false,
+                'message' => 'Error al generar el archivo Excel: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    private function consultarNombresDesdeOrigen(string $numEmpleado, string $origen)
+    {
+        $esGuardia = strtoupper($origen) === 'GN';
+        $conexion = $esGuardia ? 'gnnomina' : 'oracle_secondary';
+        $tabla = $esGuardia ? 'EMPLEADOS_PRESTACIONES_GN' : 'EMPLEADOS_PRESTACIONES';
+
+        try {
+            $empleado = DB::connection($conexion)
+                ->table($tabla)
+                ->where('NUM_EMPLEADO', $numEmpleado)
+                ->first();
+
+            if (!$empleado) {
+                $tablaAlt = $esGuardia ? 'EMPLEADOS_PRESTACIONESGN' : 'EMPLEADOS_PRESTACIONES';
+                $empleado = DB::connection($conexion)
+                    ->table($tablaAlt)
+                    ->where('NUM_EMPLEADO', $numEmpleado)
+                    ->first();
+            }
+
+            if ($empleado) {
+                return [
+                    'nombre' => $empleado->nombre ?? $empleado->NOMBRE ?? '',
+                    'apellido_paterno' => $empleado->apellido_paterno ?? $empleado->APELLIDO_PATERNO ?? '',
+                    'apellido_materno' => $empleado->apellido_materno ?? $empleado->APELLIDO_MATERNO ?? '',
+                ];
+            }
+        } catch (\Throwable $e) {
+            Log::warning("No se pudo consultar nombres en {$conexion} para empleado {$numEmpleado}: " . $e->getMessage());
+        }
+
+        return [
+            'nombre' => '',
+            'apellido_paterno' => '',
+            'apellido_materno' => '',
+        ];
     }
 }
