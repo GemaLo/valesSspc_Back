@@ -1607,8 +1607,8 @@ class AdminController extends Controller
                 ->where('status', 1)
                 ->get()
                 ->map(function ($doc) {
-                    // Generar URL accesible
-                    $doc->url = Storage::disk('public')->url($doc->document);
+                    // Genera la URL usando el protocolo y host actual de la petición
+                    $doc->url = request()->getSchemeAndHttpHost() . Storage::url($doc->document);
                     return $doc;
                 });
 
@@ -1617,12 +1617,7 @@ class AdminController extends Controller
                 'data'   => $documentos,
             ]);
         } catch (\Throwable $e) {
-            Log::error('Error al obtener documentos: ' . $e->getMessage());
-
-            return response()->json([
-                'status'  => false,
-                'message' => 'Error al consultar documentos.',
-            ], 500);
+            // ...
         }
     }
 
@@ -1652,6 +1647,181 @@ class AdminController extends Controller
             return response()->json([
                 'status'  => false,
                 'message' => 'Error al eliminar el documento.',
+            ], 500);
+        }
+    }
+    public function obtenerTiposPersona()
+    {
+        try {
+            $tipos = DB::connection('oracle_primary')->table('typePerson')->get();
+            return response()->json([
+                'status' => true,
+                'data' => $tipos,
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Error al consultar tipos de persona: ' . $e->getMessage());
+            return response()->json([
+                'status' => false,
+                'message' => 'Error al consultar tipos de persona.',
+            ], 500);
+        }
+    }
+
+    public function obtenerPersonasBeneficiarias($idRegister)
+    {
+        try {
+            $personas = \App\Models\Persona::with('typePerson')
+                ->where('idregister', (int) $idRegister)
+                ->get()
+                ->map(function ($persona) {
+                    // Forzamos un formato plano y limpio para evitar problemas de casing en el front
+                    return [
+                        'idperson'     => $persona->idperson ?? $persona->IDPERSON ?? null,
+                        'nomPerson'    => $persona->nomperson ?? $persona->NOMPERSON ?? '',
+                        'appPerson'    => $persona->appperson ?? $persona->APPPERSON ?? '',
+                        'apmPerson'    => $persona->apmperson ?? $persona->APMPERSON ?? '',
+                        'curp'         => $persona->curp ?? $persona->CURP ?? '',
+                        'rfc'          => $persona->rfc ?? $persona->RFC ?? '',
+                        'typePerson'  => [
+                            'TypePerson' => $persona->typePerson->TypePerson
+                                ?? $persona->typePerson->TYPEPERSON
+                                ?? $persona->typePerson->typePerson
+                                ?? $persona->typePerson->typeperson
+                                ?? 'No especificado'
+                        ]
+                    ];
+                });
+
+            return response()->json([
+                'status' => true,
+                'data'   => $personas,
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Error al consultar personas beneficiarias: ' . $e->getMessage());
+            return response()->json([
+                'status'  => false,
+                'message' => 'Error al consultar personas: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+    public function guardarPersonaBeneficiaria(Request $request)
+    {
+        $validated = $request->validate([
+            'idregister'   => 'required|integer',
+            'idTypePerson' => 'required|integer',
+            'nomPerson'    => 'required|string|max:200',
+            'appPerson'    => 'required|string|max:200',
+            'apmPerson'    => 'required|string|max:200',
+            'curp'         => 'nullable|string|max:18',
+            'rfc'          => 'nullable|string|max:13',
+        ]);
+
+        try {
+            $persona = \App\Models\Persona::create($validated);
+
+            return response()->json([
+                'status'  => true,
+                'message' => 'Persona registrada correctamente.',
+                'data'    => $persona,
+            ], 201);
+        } catch (\Throwable $e) {
+            Log::error('Error al guardar persona: ' . $e->getMessage());
+            return response()->json([
+                'status'  => false,
+                'message' => 'Error al registrar la persona: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+    public function descargarFormatoPersonaIndividual($idRegister, $idPerson)
+    {
+
+        if (!$idRegister || $idRegister === 'undefined' || !$idPerson || $idPerson === '0' || $idPerson === 'undefined') {
+            return response()->json([
+                'status' => false,
+                'message' => 'Los parámetros proporcionados son inválidos.',
+            ], 400);
+        }
+
+        try {
+            $consultaEmpleado = Register::query()->where('IDREGISTER', $idRegister);
+            $this->filtrarRegistrosPorEnlace($consultaEmpleado);
+            $empleado = $consultaEmpleado->first();
+
+            if (!$empleado) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'No se encontró el empleado o no tiene permisos.',
+                ], 404);
+            }
+
+            // Buscar la persona específica (beneficiaria o autorizada)
+            $persona = \App\Models\Persona::where('idregister', $idRegister)
+                ->where('idperson', $idPerson)
+                ->first();
+            Log::info('Parámetros recibidos para descarga:', [
+                'persona' => $persona,
+            ]);
+
+            if (!$persona) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'No se encontró el registro de la persona.',
+                ], 404);
+            }
+
+            $templatePath = storage_path('app/templates/formato_fallecimiento.docx');
+
+            if (!file_exists($templatePath)) {
+                throw new \Exception('La plantilla de Word "formato_fallecimiento.docx" no existe en el servidor.');
+            }
+
+            $templateProcessor = new TemplateProcessor($templatePath);
+
+            $numeroEmpleado = trim((string) ($empleado->numempleado ?? $empleado->NUMEMPLEADO ?? $idRegister));
+            $rawImporte = (float) ($empleado->IMPORTE ?? $empleado->importe ?? 0);
+
+            $formatter = new NumeroALetras();
+            $importeEnLetra = $formatter->toMoney($rawImporte, 2, 'PESOS', 'CENTAVOS');
+
+            // Asignación de variables del empleado y cuenta
+            $templateProcessor->setValue('cuenta', $empleado->CUENTAINICIAL ?? $empleado->cuentaInicial ?? $empleado->cuentainicial ?? 'N/A');
+            $templateProcessor->setValue('importe', number_format($rawImporte, 2, '.', ','));
+            $templateProcessor->setValue('importe_letra', mb_strtoupper($importeEnLetra));
+
+            $templateProcessor->setValue('nombreCompleto', $empleado->nombrecompleto ?? $empleado->nombre ?? 'N/A');
+            $templateProcessor->setValue('numEmpleado', $numeroEmpleado);
+            $templateProcessor->setValue('enlace', $empleado->idenlace ?? 'NOMBRE DEL ENLACE');
+
+            // Asignación de variables de la persona beneficiaria / autorizada
+            // Asignación de variables de la persona beneficiaria / autorizada
+            $nombrePersona = trim(($persona->nomperson ?? '') . ' ' . ($persona->appperson ?? '') . ' ' . ($persona->apmperson ?? ''));
+
+            // Usa 'nombreBeneficiario' para que coincida con la plantilla Word
+            $templateProcessor->setValue('nombreBeneficiario', $nombrePersona !== '' ? $nombrePersona : '________________________________________');
+            $templateProcessor->setValue('curpPersona', $persona->curp ?? 'N/A');
+            $templateProcessor->setValue('rfcPersona', $persona->rfc ?? 'N/A');
+
+            // Fechas
+            $templateProcessor->setValue('dia', date('d'));
+            $templateProcessor->setValue('mes', date('m'));
+            $templateProcessor->setValue('anio', date('Y'));
+
+            $fileName = "formato_fallecimiento_{$idPerson}_{$numeroEmpleado}.docx";
+            $tempFile = storage_path("app/public/{$fileName}");
+
+            $templateProcessor->saveAs($tempFile);
+
+            return response()->download($tempFile)->deleteFileAfterSend(true);
+        } catch (\Throwable $e) {
+            Log::error('Error al generar formato Word de la persona individual', [
+                'idRegister' => $idRegister,
+                'idPerson' => $idPerson,
+                'message' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'status' => false,
+                'message' => 'No se pudo generar el documento Word.',
             ], 500);
         }
     }

@@ -53,4 +53,8 @@ Route::middleware('auth:sanctum')->group(function () {
             'data'   => \App\Models\TypeDocument::all(),
         ]);
     });
+    Route::get('/gestor/tarjetas/tipos-persona', [AdminController::class, 'obtenerTiposPersona']);
+    Route::get('/gestor/tarjetas/personas/{idRegister}', [AdminController::class, 'obtenerPersonasBeneficiarias']);
+    Route::post('/gestor/tarjetas/personas', [AdminController::class, 'guardarPersonaBeneficiaria']);
+    Route::get('/gestor/tarjetas/formato-persona/{idRegister}/{idPerson}', [AdminController::class, 'descargarFormatoPersonaIndividual']);
 });
