@@ -1556,14 +1556,6 @@ class AdminController extends Controller
             ], 500);
         }
     }
-    // Agrega estas importaciones en la parte superior de AdminController.php si no existen:
-
-
-// ... dentro de class AdminController extends Controller
-
-    /**
-     * Cargar / Guardar un documento anexo para un registro
-     */
     public function guardarDocumentoAnexo(Request $request)
     {
         $request->validate([
@@ -1578,9 +1570,9 @@ class AdminController extends Controller
 
             $documento = Document::create([
                 'document'       => $path,
-                'idTypeDocument' => (int) $request->input('idTypeDocument'), // Forzar conversión a entero
-                'idRegister'     => (int) $request->input('idRegister'),     // Forzar conversión a entero
-                'status'         => 1,
+                'idTypeDocument' => (int) $request->input('idTypeDocument'), 
+                'idRegister'     => (int) $request->input('idRegister'),     
+                'status'         => null,
             ]);
 
             return response()->json([
@@ -1597,17 +1589,12 @@ class AdminController extends Controller
             ], 500);
         }
     }
-    /**
-     * Obtener listado de documentos anexos de un registro
-     */
     public function obtenerDocumentos($idRegister)
     {
         try {
             $documentos = Document::where('idRegister', $idRegister)
-                ->where('status', 1)
                 ->get()
                 ->map(function ($doc) {
-                    // Genera la URL usando el protocolo y host actual de la petición
                     $doc->url = request()->getSchemeAndHttpHost() . Storage::url($doc->document);
                     return $doc;
                 });
@@ -1621,20 +1608,15 @@ class AdminController extends Controller
         }
     }
 
-    /**
-     * Eliminar un documento anexo antes o después de definirlo
-     */
     public function eliminarDocumento($idDocument)
     {
         try {
             $documento = Document::findOrFail($idDocument);
 
-            // Eliminar del almacenamiento
             if (Storage::disk('public')->exists($documento->document)) {
                 Storage::disk('public')->delete($documento->document);
             }
 
-            // Eliminar el registro
             $documento->delete();
 
             return response()->json([
@@ -1674,7 +1656,6 @@ class AdminController extends Controller
                 ->where('idregister', (int) $idRegister)
                 ->get()
                 ->map(function ($persona) {
-                    // Forzamos un formato plano y limpio para evitar problemas de casing en el front
                     return [
                         'idperson'     => $persona->idperson ?? $persona->IDPERSON ?? null,
                         'nomPerson'    => $persona->nomperson ?? $persona->NOMPERSON ?? '',
@@ -1754,7 +1735,6 @@ class AdminController extends Controller
                 ], 404);
             }
 
-            // Buscar la persona específica (beneficiaria o autorizada)
             $persona = \App\Models\Persona::where('idregister', $idRegister)
                 ->where('idperson', $idPerson)
                 ->first();
@@ -2049,4 +2029,46 @@ class AdminController extends Controller
             'apellido_materno' => '',
         ];
     }
+public function actualizarEstatusDocumento(Request $request, $idDocument)
+{
+    $request->validate([
+        'status' => 'required|integer|in:0,1',
+    ]);
+
+    try {
+        // Usamos el Query Builder para asegurar el mapeo exacto con las columnas de Oracle (en mayúsculas)
+        $afectados = DB::connection('oracle_primary')
+            ->table('documents') // O el nombre real de tu tabla
+            ->where('IDDOCUMENT', $idDocument)
+            ->update([
+                'STATUS' => (int) $request->input('status'),
+                'UPDATED_AT' => now() // Si manejas fecha de actualización
+            ]);
+
+        if ($afectados === 0) {
+            return response()->json([
+                'status' => false,
+                'message' => 'No se encontró el documento especificado.',
+            ], 404);
+        }
+
+        $documentoActualizado = DB::connection('oracle_primary')
+            ->table('documents')
+            ->where('IDDOCUMENT', $idDocument)
+            ->first();
+
+        return response()->json([
+            'status' => true,
+            'message' => 'Estatus del documento actualizado correctamente.',
+            'data' => $documentoActualizado,
+        ]);
+    } catch (\Throwable $e) {
+        Log::error('Error al actualizar estatus de documento: ' . $e->getMessage());
+
+        return response()->json([
+            'status' => false,
+            'message' => 'Error al actualizar el estatus del documento.',
+        ], 500);
+    }
+}
 }
