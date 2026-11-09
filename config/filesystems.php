@@ -69,6 +69,15 @@ return [
             'report' => false,
         ],
 
+        'actas' => [
+            'driver' => 'local',
+            'root' => storage_path('app/actas'),
+            'url' => rtrim(env('APP_URL', 'http://localhost'), '/').'/storage',
+            'visibility' => 'public',
+            'throw' => false,
+            'report' => false,
+        ],
+
     ],
 
     /*
@@ -85,6 +94,7 @@ return [
     'links' => [
         public_path('storage') => storage_path('app/public'),
         public_path('documentos') => storage_path('app/documentos'),
+        public_path('actas') => storage_path('app/actas'),
     ],
 
 ];

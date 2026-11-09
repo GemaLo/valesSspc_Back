@@ -16,6 +16,10 @@ class TypeDocumentSeeder extends Seeder
             ['nameType' => 'Talón de pago'],
             ['nameType' => 'Pasaporte'],
             ['nameType' => 'Cédula'],
+            ['nameType' => 'Formato de Entrega'],
+            ['nameType' => 'Formato de Reposición'],
+            ['nameType' => 'Formato de Entrega por Fallecimiento'],
+            ['nameType' => 'Formato de Pensión Alimenticia'],
             ['nameType' => 'Otro'],
         ]);
     }

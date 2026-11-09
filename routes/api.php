@@ -62,4 +62,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::patch('/admin/documentos/{idDocument}/estatus', [AdminController::class, 'actualizarEstatusDocumento']);
     Route::get('/gestor/documentos/ver/{id}', [AdminController::class, 'verDocumento'])
     ->name('documentos.ver');
+
+    Route::get('/admin/tipos-actas', [AdminController::class, 'obtenerTiposActas']);
+
+// Gestión de actas y documentos por usuario (con el prefijo /admin/)
+    Route::get('/admin/users/{idUser}/documentos', [AdminController::class, 'obtenerDocumentosUsuario']);
+    Route::post('/admin/users/documentos/cargar', [AdminController::class, 'guardarDocumentoUsuario']);
+    Route::get('/admin/users/documentos/ver/{id}', [AdminController::class, 'verDocumentoUsuario'])->name('admin.users.documentos.ver');
+    Route::delete('/admin/users/documentos/{idDocument}', [AdminController::class, 'eliminarDocumentoUsuario']);
 });

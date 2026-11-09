@@ -10,15 +10,25 @@ use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
 {
-    use HasApiTokens, HasFactory, Notifiable; 
+    use HasApiTokens, HasFactory, Notifiable;
 
     protected $connection = 'oracle_primary';
-    protected $table = 'users'; 
+    protected $table = 'users';
     protected $primaryKey = 'id_user';
 
     protected $fillable = [
-        'numEmpleado', 'firstName', 'lastName', 'middleName', 'nivel', 
-        'unidad', 'active', 'idType', 'email', 'password', 'origen', 'must_change_password'
+        'numEmpleado',
+        'firstName',
+        'lastName',
+        'middleName',
+        'nivel',
+        'unidad',
+        'active',
+        'idType',
+        'email',
+        'password',
+        'origen',
+        'must_change_password'
     ];
 
     protected $hidden = [
@@ -31,14 +41,18 @@ class User extends Authenticatable
     }
 
     public function getAttributes()
-{
-    $attributes = parent::getAttributes();
-    $lowercaseAttributes = [];
-    
-    foreach ($attributes as $key => $value) {
-        $lowercaseAttributes[strtolower($key)] = $value;
+    {
+        $attributes = parent::getAttributes();
+        $lowercaseAttributes = [];
+
+        foreach ($attributes as $key => $value) {
+            $lowercaseAttributes[strtolower($key)] = $value;
+        }
+
+        return $lowercaseAttributes;
     }
-    
-    return $lowercaseAttributes;
-}
+    public function actas()
+    {
+        return $this->hasMany(Acta::class, 'id_user', 'id_user');
+    }
 }

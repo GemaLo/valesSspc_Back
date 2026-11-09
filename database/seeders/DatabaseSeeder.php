@@ -19,6 +19,7 @@ class DatabaseSeeder extends Seeder
             StatusSeeder::class,
             TypeDocumentSeeder::class,
             typePerson::class,
+            TypeActa::class,
         ]);
     }
 }

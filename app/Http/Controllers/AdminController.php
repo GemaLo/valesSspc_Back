@@ -4,9 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Models\Card;
+use App\Models\Acta;
 use App\Models\Pension;
 use App\Models\Register;
 use App\Models\Document;
+use App\Models\TypeActa;
 use Illuminate\Http\Request;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\DB;
@@ -2069,4 +2071,136 @@ public function verDocumento($id)
             ], 500);
         }
     }
+
+public function obtenerDocumentosUsuario($idUser)
+    {
+        try {
+            $actas = Acta::where('id_user', $idUser)
+                ->get()
+                ->map(function ($acta) {
+                    // Genera la ruta segura para visualizar el archivo en el navegador
+                    $acta->url = route('admin.users.documentos.ver', ['id' => $acta->id_acta]);
+                    return $acta;
+                });
+
+            return response()->json([
+                'status' => true,
+                'data' => $actas,
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Error al obtener actas del usuario: ' . $e->getMessage());
+            return response()->json([
+                'status' => false,
+                'message' => 'Error al consultar las actas.',
+            ], 500);
+        }
+    }
+
+    public function guardarDocumentoUsuario(Request $request)
+    {
+        $request->validate([
+            'id_user' => 'required|integer',
+            'archivo' => 'required|file|mimes:pdf,jpg,jpeg,png,doc,docx|max:10240',
+        ]);
+
+        try {
+            $file = $request->file('archivo');
+            $nombreArchivo = time() . '_' . preg_replace('/\s+/', '_', $file->getClientOriginalName());
+            
+            // Se almacena usando el disco 'documentos' configurado previamente
+            $file->storeAs('actas_usuarios', $nombreArchivo, 'documentos');
+
+            $acta = Acta::create([
+                'id_user' => (int) $request->input('id_user'),
+                'id_type_acta' => $request->input('id_typeActa', 1), // Opcional según tu catálogo
+                'acta' => $nombreArchivo, // Guarda estrictamente el nombre del archivo en texto
+            ]);
+
+            return response()->json([
+                'status' => true,
+                'message' => 'Acta guardada correctamente.',
+                'data' => $acta,
+            ], 201);
+        } catch (\Throwable $e) {
+            Log::error('Error al guardar acta de usuario: ' . $e->getMessage());
+            return response()->json([
+                'status' => false,
+                'message' => 'Error al guardar el archivo: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+    public function verDocumentoUsuario($id)
+    {
+        try {
+            $acta = Acta::find($id);
+
+            if (!$acta || !Storage::disk('documentos')->exists($acta->acta)) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'El archivo no se encuentra en el servidor.',
+                ], 404);
+            }
+
+            $filePath = Storage::disk('documentos')->path($acta->acta);
+            $mimeType = mime_content_type($filePath) ?: 'application/pdf';
+
+            return response()->file($filePath, [
+                'Content-Type' => $mimeType,
+                'Content-Disposition' => 'inline; filename="' . basename($filePath) . '"'
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Error al visualizar acta de usuario: ' . $e->getMessage());
+
+            return response()->json([
+                'status' => false,
+                'message' => 'Ocurrió un error al cargar el archivo.',
+            ], 500);
+        }
+    }
+
+    public function eliminarDocumentoUsuario($idDocument)
+    {
+        try {
+            $acta = Acta::findOrFail($idDocument);
+
+            if (Storage::disk('documentos')->exists($acta->acta)) {
+                Storage::disk('documentos')->delete($acta->acta);
+            }
+
+            $acta->delete();
+
+            return response()->json([
+                'status' => true,
+                'message' => 'Acta eliminada correctamente.',
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Error al eliminar acta de usuario: ' . $e->getMessage());
+
+            return response()->json([
+                'status' => false,
+                'message' => 'Error al eliminar el documento.',
+            ], 500);
+        }
+    }
+    // Obtener el catálogo de tipos de actas
+    public function obtenerTiposActas()
+    {
+        try {
+            $tipos = DB::connection('oracle_primary')
+                ->table('type_actas')
+                ->get();
+
+            return response()->json([
+                'status' => true,
+                'data' => $tipos,
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Error al consultar tipos de actas: ' . $e->getMessage());
+            return response()->json([
+                'status' => false,
+                'message' => 'Error al consultar los tipos de actas.',
+            ], 500);
+        }
+    }
+
 }
