@@ -1532,10 +1532,7 @@ class AdminController extends Controller
             $documentos = Document::where('idRegister', $idRegister)
                 ->get()
                 ->map(function ($doc) {
-                    // Generamos una ruta o identificador seguro para la segunda función
                     $docId = $doc->idDocument ?? $doc->iddocument ?? $doc->IDDOCUMENT;
-
-                    // Puedes retornar una ruta limpia hacia tu nuevo endpoint de visualización
                     $doc->url = route('documentos.ver', ['id' => $docId]);
 
                     return $doc;
@@ -1555,48 +1552,43 @@ class AdminController extends Controller
         }
     }
 
-    /**
-     * 2. Método independiente para visualizar/renderizar el archivo en el navegador.
-     */
     public function verDocumento($id)
-    {
-        try {
-            $doc = Document::find($id);
+{
+    try {
+        $doc = Document::find($id);
 
-            if (!$doc || !Storage::disk('public')->exists($doc->document)) {
-                return response()->json([
-                    'status' => false,
-                    'message' => 'El archivo no se encuentra en el servidor.',
-                ], 404);
-            }
-
-            $filePath = Storage::disk('public')->path($doc->document);
-
-            // Detectamos el tipo MIME real del archivo (ej. application/pdf, image/jpeg, etc.)
-            $mimeType = mime_content_type($filePath) ?: 'application/pdf';
-
-            // Usamos response()->file con la cabecera 'inline' implícita 
-            return response()->file($filePath, [
-                'Content-Type' => $mimeType,
-                'Content-Disposition' => 'inline; filename="' . basename($filePath) . '"'
-            ]);
-        } catch (\Throwable $e) {
-            Log::error('Error al visualizar el documento: ' . $e->getMessage());
-
+        if (!$doc || !Storage::disk('documentos')->exists($doc->document)) {
             return response()->json([
                 'status' => false,
-                'message' => 'Ocurrió un error al cargar el archivo.',
-            ], 500);
+                'message' => 'El archivo no se encuentra en el servidor.',
+            ], 404);
         }
+
+        $filePath = Storage::disk('documentos')->path($doc->document);
+
+        $mimeType = mime_content_type($filePath) ?: 'application/pdf';
+
+        return response()->file($filePath, [
+            'Content-Type' => $mimeType,
+            'Content-Disposition' => 'inline; filename="' . basename($filePath) . '"'
+        ]);
+    } catch (\Throwable $e) {
+        Log::error('Error al visualizar el documento: ' . $e->getMessage());
+
+        return response()->json([
+            'status' => false,
+            'message' => 'Ocurrió un error al cargar el archivo.',
+        ], 500);
     }
+}
 
     public function eliminarDocumento($idDocument)
     {
         try {
             $documento = Document::findOrFail($idDocument);
 
-            if (Storage::disk('public')->exists($documento->document)) {
-                Storage::disk('public')->delete($documento->document);
+            if (Storage::disk('documentos')->exists($documento->document)) {
+                Storage::disk('documentos')->delete($documento->document);
             }
 
             $documento->delete();
