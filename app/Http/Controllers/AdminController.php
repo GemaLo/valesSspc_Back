@@ -47,6 +47,7 @@ class AdminController extends Controller
                     'ORIGEN',
                     'PENSION',
                     'IMPORTE',
+                    'FECHAENTREGA',
                     'CREATED_AT',
                     'UPDATED_AT',
                 ])
@@ -72,29 +73,56 @@ class AdminController extends Controller
             ], 500);
         }
     }
-    public function actualizarEstatusVale(Request $request)
-    {
-        $request->validate([
-            'idRegister' => 'required',
-            'idStatus' => 'required|integer|in:1,2,3,4',
-        ]);
-        try {
-            $registro = Register::on('oracle_primary')->findOrFail($request->idRegister);
-            $registro->idStatus = $request->idStatus;
-            $registro->save();
+public function actualizarEstatusVale(Request $request)
+{
+    $request->validate([
+        'idRegister' => 'required',
+        'idStatus' => 'required|integer|in:1,2,3,4',
+    ]);
 
-            return response()->json([
-                'status' => true,
-                'message' => 'Estatus actualizado correctamente.'
-            ]);
-        } catch (\Exception $e) {
+    try {
+        $idRegister = $request->input('idRegister');
+        $nuevoEstatus = (int) $request->input('idStatus');
+
+        // Preparamos los datos a actualizar de forma limpia y sin duplicados
+        $datosActualizar = [
+            'IDSTATUS' => $nuevoEstatus,
+            'UPDATED_AT' => now(),
+        ];
+
+        // Si se selecciona "Entregada" (2), guardamos la fecha y hora de entrega
+        if ($nuevoEstatus === 2) {
+            // Nota: Si tu columna en Oracle se llama FECHA_ENTREGA en lugar de FECHAENTREGA, 
+            // solo cambia la clave del array aquí abajo:
+            $datosActualizar['FECHAENTREGA'] = now(); 
+        }
+
+        $afectados = DB::connection('oracle_primary')
+            ->table('REGISTERS')
+            ->where('IDREGISTER', $idRegister) // <- Aquí estaba el fallo del is null
+            ->update($datosActualizar);
+
+        if ($afectados === 0) {
             return response()->json([
                 'status' => false,
-                'message' => 'Error al actualizar: ' . $e->getMessage()
-            ], 500);
+                'message' => 'No se encontró el registro especificado.',
+            ], 404);
         }
-    }
 
+        return response()->json([
+            'status' => true,
+            'message' => 'Estatus actualizado correctamente.',
+            'fechaEntrega' => $nuevoEstatus === 2 ? now('America/Mexico_City')->toIso8601String() : null,
+        ]);
+    } catch (\Exception $e) {
+        Log::error('Error al actualizar estatus: ' . $e->getMessage());
+
+        return response()->json([
+            'status' => false,
+            'message' => 'Error al actualizar: ' . $e->getMessage()
+        ], 500);
+    }
+}
     public function uploadTarjetas(Request $request)
     {
         $request->validate([

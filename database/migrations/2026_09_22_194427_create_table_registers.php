@@ -32,6 +32,7 @@ return new class extends Migration
             $table->string('ORIGEN')->nullable();
             $table->string('PENSION')->nullable();
             $table->string('IMPORTE')->nullable();
+            $table->string('FECHAENTREGA')->nullable();
 
             $table->foreign('IDSTATUS')
                 ->references('IDSTATUS')

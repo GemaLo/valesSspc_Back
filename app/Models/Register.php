@@ -43,6 +43,7 @@ public function documentos()
         'ORIGEN',
         'PENSION',
         'IMPORTE',
-        'OBSERVACIONINICIAL'
+        'OBSERVACIONINICIAL',
+        'FECHAENTREGA',
     ];
 }
