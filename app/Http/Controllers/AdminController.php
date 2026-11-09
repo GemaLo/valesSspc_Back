@@ -26,7 +26,7 @@ class AdminController extends Controller
         try {
             $estatus = $request->query('estatus', 'todos');
 
-            $query = Register::query()
+            $query = Register::with('documentos') // <-- Incluimos los documentos del registro
                 ->select([
                     'IDREGISTER',
                     'NOMBRECOMPLETO',
@@ -55,7 +55,6 @@ class AdminController extends Controller
             if ($estatus !== 'todos' && $estatus !== null) {
                 $query->where('IDSTATUS', $estatus);
             }
-
             $this->filtrarRegistrosPorEnlace($query);
 
             $registros = $query->orderBy('IDREGISTER', 'desc')->get();
@@ -73,7 +72,6 @@ class AdminController extends Controller
             ], 500);
         }
     }
-
     public function actualizarEstatusVale(Request $request)
     {
         $request->validate([
