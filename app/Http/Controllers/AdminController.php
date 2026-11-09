@@ -1526,33 +1526,35 @@ class AdminController extends Controller
             ], 500);
         }
     }
-    public function obtenerDocumentos($idRegister)
-    {
-        try {
-            $documentos = Document::where('idRegister', $idRegister)
-                ->get()
-                ->map(function ($doc) {
-                    $docId = $doc->idDocument ?? $doc->iddocument ?? $doc->IDDOCUMENT;
-                    $doc->url = route('documentos.ver', ['id' => $docId]);
+public function obtenerDocumentos($idRegister)
+{
+    try {
+        $documentos = Document::where('idRegister', $idRegister)
+            ->get()
+            ->map(function ($doc) {
+                $docId = $doc->idDocument ?? $doc->iddocument ?? $doc->IDDOCUMENT;
+                
+                
+                $doc->url = '/api/gestor/documentos/ver/' . $docId;
 
-                    return $doc;
-                });
+                return $doc;
+            });
 
-            return response()->json([
-                'status' => true,
-                'data'   => $documentos,
-            ]);
-        } catch (\Throwable $e) {
-            Log::error('Error al obtener los documentos: ' . $e->getMessage());
+        return response()->json([
+            'status' => true,
+            'data'   => $documentos,
+        ]);
+    } catch (\Throwable $e) {
+        Log::error('Error al obtener los documentos: ' . $e->getMessage());
 
-            return response()->json([
-                'status' => false,
-                'message' => 'Ocurrió un error al obtener los documentos.',
-            ], 500);
-        }
+        return response()->json([
+            'status' => false,
+            'message' => 'Ocurrió un error al obtener los documentos.',
+        ], 500);
     }
+}
 
-    public function verDocumento($id)
+public function verDocumento($id)
 {
     try {
         $doc = Document::find($id);
@@ -1565,7 +1567,6 @@ class AdminController extends Controller
         }
 
         $filePath = Storage::disk('documentos')->path($doc->document);
-
         $mimeType = mime_content_type($filePath) ?: 'application/pdf';
 
         return response()->file($filePath, [
