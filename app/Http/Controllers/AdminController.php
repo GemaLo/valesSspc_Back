@@ -26,7 +26,7 @@ class AdminController extends Controller
         try {
             $estatus = $request->query('estatus', 'todos');
 
-            $query = Register::with('documentos') // <-- Incluimos los documentos del registro
+            $query = Register::with('documentos')
                 ->select([
                     'IDREGISTER',
                     'NOMBRECOMPLETO',
@@ -771,68 +771,6 @@ class AdminController extends Controller
         ], 201);
     }
 
-    public function users_list_json()
-    {
-        $query = DB::connection('oracle_primary')
-            ->table('users')
-            ->join('typeUser', 'typeUser.idType', '=', 'users.idType')
-            ->selectRaw(
-                'users.ID_USER AS "id_user",
-             users.NUMEMPLEADO AS "numempleado",
-             users.FIRSTNAME || \' \' || users.LASTNAME || \' \' || users.MIDDLENAME AS "name_complete",
-             users.ORIGEN AS "origen",
-             typeUser.TYPEUSER AS "typeuser",
-             users.UNIDAD AS "unidad",
-             users.EMAIL AS "email",
-             users.ACTIVE AS "active"'
-            )
-            ->orderBy('users.ID_USER');
-
-        if (Auth::check()) {
-            $usuarioActual = Auth::user();
-            $tipoUsuario = (int) (
-                $usuarioActual->idType
-                ?? $usuarioActual->idtype
-                ?? $usuarioActual->IDTYPE
-                ?? 0
-            );
-
-            if ($tipoUsuario === 3) {
-                $idUsuario = $usuarioActual->id_user
-                    ?? $usuarioActual->ID_USER
-                    ?? null;
-
-                $query->where('users.id_user', $idUsuario);
-            } elseif ($tipoUsuario === 2) {
-                $unidad = $usuarioActual->unidad
-                    ?? $usuarioActual->UNIDAD
-                    ?? null;
-
-                if ($unidad) {
-                    $query->where('users.unidad', $unidad);
-                } else {
-                    $query->whereRaw('1 = 0');
-                }
-            }
-        }
-
-        return DataTables::of($query)
-            ->filterColumn('name_complete', function ($query, $keyword) {
-                $query->whereRaw(
-                    "UPPER(users.FIRSTNAME || ' ' || users.LASTNAME || ' ' || users.MIDDLENAME) LIKE ?",
-                    ['%' . strtoupper($keyword) . '%']
-                );
-            })
-            ->editColumn('active', function ($usuario) {
-                return (int) $usuario->active === 1
-                    ? '<span class="badge bg-success">Activo</span>'
-                    : '<span class="badge bg-danger">Inactivo</span>';
-            })
-            ->addColumn('btn_edit', 'buttons.button_user')
-            ->rawColumns(['btn_edit', 'active'])
-            ->toJson();
-    }
-
     public function editUser($idUser)
     {
         $usuario = User::findOrFail($idUser);
@@ -1558,13 +1496,14 @@ class AdminController extends Controller
     {
         $request->validate([
             'idRegister'     => 'required|integer',
-            'idTypeDocument' => 'required|integer', // Valida que sea estrictamente un entero
-            'archivo'        => 'required|file|mimes:pdf,jpg,jpeg,png,doc,docx|max:10240',
+            'idTypeDocument' => 'required|integer',
+            'archivo'        => 'required|file|mimes:pdf,jpg,jpeg,png|max:2048',
         ]);
 
         try {
             $file = $request->file('archivo');
-            $path = $file->store('documentos', 'public');
+
+            $path = $file->store('', 'documentos');
 
             $documento = Document::create([
                 'document'       => $path,
@@ -1587,9 +1526,6 @@ class AdminController extends Controller
             ], 500);
         }
     }
-    /**
-     * 1. Método para obtener la lista de documentos del registro.
-     */
     public function obtenerDocumentos($idRegister)
     {
         try {
@@ -1598,10 +1534,10 @@ class AdminController extends Controller
                 ->map(function ($doc) {
                     // Generamos una ruta o identificador seguro para la segunda función
                     $docId = $doc->idDocument ?? $doc->iddocument ?? $doc->IDDOCUMENT;
-                    
+
                     // Puedes retornar una ruta limpia hacia tu nuevo endpoint de visualización
-                    $doc->url = route('documentos.ver', ['id' => $docId]); 
-                    
+                    $doc->url = route('documentos.ver', ['id' => $docId]);
+
                     return $doc;
                 });
 
@@ -1622,7 +1558,7 @@ class AdminController extends Controller
     /**
      * 2. Método independiente para visualizar/renderizar el archivo en el navegador.
      */
-public function verDocumento($id)
+    public function verDocumento($id)
     {
         try {
             $doc = Document::find($id);
@@ -1635,7 +1571,7 @@ public function verDocumento($id)
             }
 
             $filePath = Storage::disk('public')->path($doc->document);
-            
+
             // Detectamos el tipo MIME real del archivo (ej. application/pdf, image/jpeg, etc.)
             $mimeType = mime_content_type($filePath) ?: 'application/pdf';
 
