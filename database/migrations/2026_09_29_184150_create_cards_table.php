@@ -11,7 +11,7 @@ return new class extends Migration
         Schema::create('cards', function (Blueprint $table) {
             $table->id('idCard');
             $table->string('cuenta');
-            $table->string('folioCard');
+            $table->string('folioCard')->nullable();
             $table->unsignedBigInteger('idRegister')->nullable();
             $table->foreign('idRegister')->references('idRegister')->on('registers');
             $table->unsignedBigInteger('idStatus')->nullable();

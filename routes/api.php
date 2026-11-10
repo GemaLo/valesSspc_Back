@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AdminController;
+use App\Http\Controllers\CardsController;
 use App\Http\Controllers\GestorController;
 use Illuminate\Http\Request;
 use App\Http\Controllers\LoginController;
@@ -67,4 +68,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/admin/users/documentos/cargar', [AdminController::class, 'guardarDocumentoUsuario']);
     Route::get('/admin/users/documentos/ver/{id}', [AdminController::class, 'verDocumentoUsuario']);
     Route::delete('/admin/users/documentos/{idDocument}', [AdminController::class, 'eliminarDocumentoUsuario']);
+
+Route::post('/tarjetas/upload', [CardsController::class, 'upload']);
 });
