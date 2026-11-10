@@ -75,56 +75,56 @@ class AdminController extends Controller
             ], 500);
         }
     }
-public function actualizarEstatusVale(Request $request)
-{
-    $request->validate([
-        'idRegister' => 'required',
-        'idStatus' => 'required|integer|in:1,2,3,4',
-    ]);
+    public function actualizarEstatusVale(Request $request)
+    {
+        $request->validate([
+            'idRegister' => 'required',
+            'idStatus' => 'required|integer|in:1,2,3,4',
+        ]);
 
-    try {
-        $idRegister = $request->input('idRegister');
-        $nuevoEstatus = (int) $request->input('idStatus');
+        try {
+            $idRegister = $request->input('idRegister');
+            $nuevoEstatus = (int) $request->input('idStatus');
 
-        // Preparamos los datos a actualizar de forma limpia y sin duplicados
-        $datosActualizar = [
-            'IDSTATUS' => $nuevoEstatus,
-            'UPDATED_AT' => now(),
-        ];
+            // Preparamos los datos a actualizar de forma limpia y sin duplicados
+            $datosActualizar = [
+                'IDSTATUS' => $nuevoEstatus,
+                'UPDATED_AT' => now(),
+            ];
 
-        // Si se selecciona "Entregada" (2), guardamos la fecha y hora de entrega
-        if ($nuevoEstatus === 2) {
-            // Nota: Si tu columna en Oracle se llama FECHA_ENTREGA en lugar de FECHAENTREGA, 
-            // solo cambia la clave del array aquí abajo:
-            $datosActualizar['FECHAENTREGA'] = now(); 
-        }
+            // Si se selecciona "Entregada" (2), guardamos la fecha y hora de entrega
+            if ($nuevoEstatus === 2) {
+                // Nota: Si tu columna en Oracle se llama FECHA_ENTREGA en lugar de FECHAENTREGA, 
+                // solo cambia la clave del array aquí abajo:
+                $datosActualizar['FECHAENTREGA'] = now();
+            }
 
-        $afectados = DB::connection('oracle_primary')
-            ->table('REGISTERS')
-            ->where('IDREGISTER', $idRegister) // <- Aquí estaba el fallo del is null
-            ->update($datosActualizar);
+            $afectados = DB::connection('oracle_primary')
+                ->table('REGISTERS')
+                ->where('IDREGISTER', $idRegister) // <- Aquí estaba el fallo del is null
+                ->update($datosActualizar);
 
-        if ($afectados === 0) {
+            if ($afectados === 0) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'No se encontró el registro especificado.',
+                ], 404);
+            }
+
+            return response()->json([
+                'status' => true,
+                'message' => 'Estatus actualizado correctamente.',
+                'fechaEntrega' => $nuevoEstatus === 2 ? now('America/Mexico_City')->toIso8601String() : null,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error al actualizar estatus: ' . $e->getMessage());
+
             return response()->json([
                 'status' => false,
-                'message' => 'No se encontró el registro especificado.',
-            ], 404);
+                'message' => 'Error al actualizar: ' . $e->getMessage()
+            ], 500);
         }
-
-        return response()->json([
-            'status' => true,
-            'message' => 'Estatus actualizado correctamente.',
-            'fechaEntrega' => $nuevoEstatus === 2 ? now('America/Mexico_City')->toIso8601String() : null,
-        ]);
-    } catch (\Exception $e) {
-        Log::error('Error al actualizar estatus: ' . $e->getMessage());
-
-        return response()->json([
-            'status' => false,
-            'message' => 'Error al actualizar: ' . $e->getMessage()
-        ], 500);
     }
-}
     public function uploadTarjetas(Request $request)
     {
         $request->validate([
@@ -1556,62 +1556,58 @@ public function actualizarEstatusVale(Request $request)
             ], 500);
         }
     }
-public function obtenerDocumentos($idRegister)
-{
-    try {
-        $documentos = Document::where('idRegister', $idRegister)
-            ->get()
-            ->map(function ($doc) {
-                $docId = $doc->idDocument ?? $doc->iddocument ?? $doc->IDDOCUMENT;
-                
-                
-                $doc->url = '/api/gestor/documentos/ver/' . $docId;
+    public function obtenerDocumentos($idRegister)
+    {
+        try {
+            $documentos = Document::where('idRegister', $idRegister)
+                ->get()
+                ->map(function ($doc) {
+                    $docId = $doc->idDocument ?? $doc->iddocument ?? $doc->IDDOCUMENT;
+                    $doc->url = '/api/gestor/documentos/ver/' . $docId;
+                    return $doc;
+                });
+            return response()->json([
+                'status' => true,
+                'data'   => $documentos,
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Error al obtener los documentos: ' . $e->getMessage());
 
-                return $doc;
-            });
-
-        return response()->json([
-            'status' => true,
-            'data'   => $documentos,
-        ]);
-    } catch (\Throwable $e) {
-        Log::error('Error al obtener los documentos: ' . $e->getMessage());
-
-        return response()->json([
-            'status' => false,
-            'message' => 'Ocurrió un error al obtener los documentos.',
-        ], 500);
-    }
-}
-
-public function verDocumento($id)
-{
-    try {
-        $doc = Document::find($id);
-
-        if (!$doc || !Storage::disk('documentos')->exists($doc->document)) {
             return response()->json([
                 'status' => false,
-                'message' => 'El archivo no se encuentra en el servidor.',
-            ], 404);
+                'message' => 'Ocurrió un error al obtener los documentos.',
+            ], 500);
         }
-
-        $filePath = Storage::disk('documentos')->path($doc->document);
-        $mimeType = mime_content_type($filePath) ?: 'application/pdf';
-
-        return response()->file($filePath, [
-            'Content-Type' => $mimeType,
-            'Content-Disposition' => 'inline; filename="' . basename($filePath) . '"'
-        ]);
-    } catch (\Throwable $e) {
-        Log::error('Error al visualizar el documento: ' . $e->getMessage());
-
-        return response()->json([
-            'status' => false,
-            'message' => 'Ocurrió un error al cargar el archivo.',
-        ], 500);
     }
-}
+
+    public function verDocumento($id)
+    {
+        try {
+            $doc = Document::find($id);
+
+            if (!$doc || !Storage::disk('documentos')->exists($doc->document)) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'El archivo no se encuentra en el servidor.',
+                ], 404);
+            }
+
+            $filePath = Storage::disk('documentos')->path($doc->document);
+            $mimeType = mime_content_type($filePath) ?: 'application/pdf';
+
+            return response()->file($filePath, [
+                'Content-Type' => $mimeType,
+                'Content-Disposition' => 'inline; filename="' . basename($filePath) . '"'
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Error al visualizar el documento: ' . $e->getMessage());
+
+            return response()->json([
+                'status' => false,
+                'message' => 'Ocurrió un error al cargar el archivo.',
+            ], 500);
+        }
+    }
 
     public function eliminarDocumento($idDocument)
     {
@@ -2036,13 +2032,12 @@ public function verDocumento($id)
         ]);
 
         try {
-            // Usamos el Query Builder para asegurar el mapeo exacto con las columnas de Oracle (en mayúsculas)
             $afectados = DB::connection('oracle_primary')
-                ->table('documents') // O el nombre real de tu tabla
+                ->table('documents')
                 ->where('IDDOCUMENT', $idDocument)
                 ->update([
                     'STATUS' => (int) $request->input('status'),
-                    'UPDATED_AT' => now() // Si manejas fecha de actualización
+                    'UPDATED_AT' => now()
                 ]);
 
             if ($afectados === 0) {
@@ -2073,53 +2068,88 @@ public function verDocumento($id)
     }
 
 public function obtenerDocumentosUsuario($idUser)
-    {
-        try {
-            $actas = Acta::where('id_user', $idUser)
-                ->get()
-                ->map(function ($acta) {
-                    // Genera la ruta segura para visualizar el archivo en el navegador
-                    $acta->url = route('admin.users.documentos.ver', ['id' => $acta->id_acta]);
-                    return $acta;
-                });
+{
+    try {
+        $actas = Acta::where('id_user', $idUser)
+            ->get()
+            ->map(function ($acta) {
+                $id_acta = $acta->id_acta ?? $acta->ID_ACTA ?? $acta->id_Acta;
+                
+                // CORREGIDO: Debe coincidir exactamente con la ruta de Laravel (/admin/users/documentos/ver/{id})
+                // Asegúrate de incluir el prefijo '/api' si tu grupo de rutas lo requiere (ej: /api/admin/...)
+                $acta->url = '/api/admin/users/documentos/ver/' . $id_acta;
+                
+                return $acta;
+            });
 
-            return response()->json([
-                'status' => true,
-                'data' => $actas,
-            ]);
-        } catch (\Throwable $e) {
-            Log::error('Error al obtener actas del usuario: ' . $e->getMessage());
+        return response()->json([
+            'status' => true,
+            'data'   => $actas,
+        ]);
+    } catch (\Throwable $e) {
+        Log::error('Error al obtener el acta: ' . $e->getMessage());
+
+        return response()->json([
+            'status' => false,
+            'message' => 'Ocurrió un error al obtener el acta.',
+        ], 500);
+    }
+}
+
+public function verDocumentoUsuario($id)
+{
+    try {
+        // CORREGIDO: Usar la misma variable ($acta) de forma consistente
+        $acta = Acta::find($id);
+
+        if (!$acta || !Storage::disk('actas')->exists($acta->acta)) {
             return response()->json([
                 'status' => false,
-                'message' => 'Error al consultar las actas.',
-            ], 500);
+                'message' => 'El archivo no se encuentra en el servidor.',
+            ], 404);
         }
+
+        $filePath = Storage::disk('actas')->path($acta->acta);
+        $mimeType = mime_content_type($filePath) ?: 'application/pdf';
+
+        return response()->file($filePath, [
+            'Content-Type' => $mimeType,
+            'Content-Disposition' => 'inline; filename="' . basename($filePath) . '"'
+        ]);
+    } catch (\Throwable $e) {
+        Log::error('Error al visualizar el documento: ' . $e->getMessage());
+
+        return response()->json([
+            'status' => false,
+            'message' => 'Ocurrió un error al cargar el archivo.',
+        ], 500);
     }
+}
 
     public function guardarDocumentoUsuario(Request $request)
     {
         $request->validate([
-            'id_user' => 'required|integer',
-            'archivo' => 'required|file|mimes:pdf,jpg,jpeg,png,doc,docx|max:10240',
+            'id_user'     => 'required|integer',
+            'id_typeActa' => 'required|integer',
+            'archivo'     => 'required|file|mimes:pdf,jpg,jpeg,png,doc,docx|max:10240',
         ]);
 
         try {
             $file = $request->file('archivo');
             $nombreArchivo = time() . '_' . preg_replace('/\s+/', '_', $file->getClientOriginalName());
-            
-            // Se almacena usando el disco 'documentos' configurado previamente
-            $file->storeAs('actas_usuarios', $nombreArchivo, 'documentos');
+
+            $file->storeAs('', $nombreArchivo, 'actas');
 
             $acta = Acta::create([
-                'id_user' => (int) $request->input('id_user'),
-                'id_type_acta' => $request->input('id_typeActa', 1), // Opcional según tu catálogo
-                'acta' => $nombreArchivo, // Guarda estrictamente el nombre del archivo en texto
+                'id_user'     => (int) $request->input('id_user'),
+                'id_typeActa' => (int) $request->input('id_typeActa'),
+                'acta'        => $nombreArchivo,
             ]);
 
             return response()->json([
-                'status' => true,
+                'status'  => true,
                 'message' => 'Acta guardada correctamente.',
-                'data' => $acta,
+                'data'    => $acta,
             ], 201);
         } catch (\Throwable $e) {
             Log::error('Error al guardar acta de usuario: ' . $e->getMessage());
@@ -2129,42 +2159,13 @@ public function obtenerDocumentosUsuario($idUser)
             ], 500);
         }
     }
-    public function verDocumentoUsuario($id)
-    {
-        try {
-            $acta = Acta::find($id);
-
-            if (!$acta || !Storage::disk('documentos')->exists($acta->acta)) {
-                return response()->json([
-                    'status' => false,
-                    'message' => 'El archivo no se encuentra en el servidor.',
-                ], 404);
-            }
-
-            $filePath = Storage::disk('documentos')->path($acta->acta);
-            $mimeType = mime_content_type($filePath) ?: 'application/pdf';
-
-            return response()->file($filePath, [
-                'Content-Type' => $mimeType,
-                'Content-Disposition' => 'inline; filename="' . basename($filePath) . '"'
-            ]);
-        } catch (\Throwable $e) {
-            Log::error('Error al visualizar acta de usuario: ' . $e->getMessage());
-
-            return response()->json([
-                'status' => false,
-                'message' => 'Ocurrió un error al cargar el archivo.',
-            ], 500);
-        }
-    }
-
     public function eliminarDocumentoUsuario($idDocument)
     {
         try {
             $acta = Acta::findOrFail($idDocument);
 
-            if (Storage::disk('documentos')->exists($acta->acta)) {
-                Storage::disk('documentos')->delete($acta->acta);
+            if (Storage::disk('actas')->exists($acta->acta)) {
+                Storage::disk('actas')->delete($acta->acta);
             }
 
             $acta->delete();
@@ -2182,7 +2183,7 @@ public function obtenerDocumentosUsuario($idUser)
             ], 500);
         }
     }
-    // Obtener el catálogo de tipos de actas
+
     public function obtenerTiposActas()
     {
         try {
@@ -2202,5 +2203,4 @@ public function obtenerDocumentosUsuario($idUser)
             ], 500);
         }
     }
-
 }
