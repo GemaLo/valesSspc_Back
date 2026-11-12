@@ -7,7 +7,6 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
-
 class User extends Authenticatable
 {
     use HasApiTokens, HasFactory, Notifiable;
@@ -15,6 +14,9 @@ class User extends Authenticatable
     protected $connection = 'oracle_primary';
     protected $table = 'users';
     protected $primaryKey = 'id_user';
+    
+    public $incrementing = true;
+    protected $keyType = 'int';
 
     protected $fillable = [
         'numEmpleado',
@@ -35,6 +37,11 @@ class User extends Authenticatable
         'password',
     ];
 
+    protected $casts = [
+        'active' => 'integer',
+        'must_change_password' => 'integer',
+    ];
+
     public function typeUser()
     {
         return $this->belongsTo(TypeUser::class, 'idType', 'idType');
@@ -51,6 +58,7 @@ class User extends Authenticatable
 
         return $lowercaseAttributes;
     }
+
     public function actas()
     {
         return $this->hasMany(Acta::class, 'id_user', 'id_user');

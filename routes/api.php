@@ -69,5 +69,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/admin/users/documentos/ver/{id}', [AdminController::class, 'verDocumentoUsuario']);
     Route::delete('/admin/users/documentos/{idDocument}', [AdminController::class, 'eliminarDocumentoUsuario']);
 
-Route::post('/tarjetas/upload', [CardsController::class, 'upload']);
+    Route::post('/tarjetas/upload', [CardsController::class, 'upload']);
+    Route::get('/gestor/tarjetas/por-anio', [CardsController::class, 'obtenerTarjetasPorAnio']);
 });
+Route::middleware('auth:sanctum')->post('/change-password', [LoginController::class, 'changePassword']);

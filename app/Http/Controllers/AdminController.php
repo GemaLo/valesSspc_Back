@@ -86,22 +86,18 @@ class AdminController extends Controller
             $idRegister = $request->input('idRegister');
             $nuevoEstatus = (int) $request->input('idStatus');
 
-            // Preparamos los datos a actualizar de forma limpia y sin duplicados
             $datosActualizar = [
                 'IDSTATUS' => $nuevoEstatus,
                 'UPDATED_AT' => now(),
             ];
 
-            // Si se selecciona "Entregada" (2), guardamos la fecha y hora de entrega
             if ($nuevoEstatus === 2) {
-                // Nota: Si tu columna en Oracle se llama FECHA_ENTREGA en lugar de FECHAENTREGA, 
-                // solo cambia la clave del array aquí abajo:
                 $datosActualizar['FECHAENTREGA'] = now();
             }
 
             $afectados = DB::connection('oracle_primary')
                 ->table('REGISTERS')
-                ->where('IDREGISTER', $idRegister) // <- Aquí estaba el fallo del is null
+                ->where('IDREGISTER', $idRegister)
                 ->update($datosActualizar);
 
             if ($afectados === 0) {
@@ -471,11 +467,29 @@ class AdminController extends Controller
             }
 
             $numeroEmpleado = trim((string) ($empleado->numempleado ?? $empleado->NUMEMPLEADO ?? $idRegister));
+            $origenReg = strtoupper(trim((string)($empleado->ORIGEN ?? $empleado->origen ?? 'SC')));
+
+            // Consultar nombres limpios desde la fuente (Secretaría o Guardia) igual que en el Excel
+            $nombreDatos = $this->consultarNombresDesdeOrigen($numeroEmpleado, $origenReg);
+            $nombres = trim($nombreDatos['nombre'] ?? '');
+            $paterno = trim($nombreDatos['apellido_paterno'] ?? '');
+            $materno = trim($nombreDatos['apellido_materno'] ?? '');
+            $nombreCompletoTotal = trim("{$nombres} {$paterno} {$materno}");
+
+            if ($nombreCompletoTotal === '') {
+                $nombreCompletoTotal = trim((string)($empleado->NOMBRECOMPLETO ?? $empleado->nombrecompleto ?? 'N/A'));
+            }
 
             $pensionados = Pension::where('NUMEMPLEADO', '=', $numeroEmpleado)->get();
 
             if ($pensionados->isEmpty() && method_exists($empleado, 'pensionados')) {
                 $pensionados = $empleado->pensionados()->get();
+            }
+
+            // Validar si tiene pensión registrada para asignar la leyenda
+            $leyendaPensionTexto = '';
+            if ($pensionados->isNotEmpty()) {
+                $leyendaPensionTexto = "Persona servidora pública: Se le exhorta a informar a su(s) beneficiaria(os) de pensión alimenticia, que debe(n) de acudir a la sede de su adscripción con la persona enlace, a recoger los vales de despensa que les corresponde, a partir del 04 enero 2027 al 12 de junio del 2027.";
             }
 
             $rawImporte = (float) ($empleado->IMPORTE ?? $empleado->importe ?? 0);
@@ -500,25 +514,22 @@ class AdminController extends Controller
             $templateProcessor = new TemplateProcessor($templatePath);
 
             $importeNeto = $empleado->IMPORTE_NETO;
-
             $formatter = new NumeroALetras();
-
             $importeEnLetra = $formatter->toMoney($importeNeto, 2, 'PESOS', 'CENTAVOS');
 
             $templateProcessor->setValue('cuenta', $empleado->CUENTAINICIAL ?? $empleado->cuentaInicial ?? $empleado->cuentainicial ?? 'N/A');
             $templateProcessor->setValue('importe', number_format($importeNeto, 2, '.', ','));
             $templateProcessor->setValue('importe_letra', mb_strtoupper($importeEnLetra));
 
-            $templateProcessor->setValue('nombreCompleto', $empleado->nombrecompleto ?? $empleado->nombre ?? 'N/A');
+            $templateProcessor->setValue('nombreCompleto', $nombreCompletoTotal);
             $templateProcessor->setValue('numEmpleado', $numeroEmpleado);
             $templateProcessor->setValue('nombreBeneficiario', $empleado->NOMBRE_BENEFICIARIO ?? '________________________________________');
             $templateProcessor->setValue('enlace', $empleado->idenlace ?? 'NOMBRE DEL ENLACE');
 
-            $templateProcessor->setValue('dia', date('d'));
-            $templateProcessor->setValue('mes', date('m'));
-            $templateProcessor->setValue('anio', date('Y'));
+            // Asignar la leyenda condicional a la plantilla
+            $templateProcessor->setValue('leyenda_pension', $leyendaPensionTexto);
 
-            $rfc = strtoupper(trim($empleado->rfc ?? ''));
+            $rfc = strtoupper(trim($empleado->rfc ?? $empleado->RFC ?? ''));
             $charsRfc = str_pad($rfc, 13, ' ', STR_PAD_RIGHT);
 
             for ($i = 0; $i < 13; $i++) {
@@ -542,7 +553,6 @@ class AdminController extends Controller
             ], 500);
         }
     }
-
 
     public function descargarFormatoPensionadoIndividual($idRegister, $idPension)
     {
@@ -1834,6 +1844,8 @@ class AdminController extends Controller
             'enlace' => ['nullable', 'string'],
             'origen' => ['nullable', 'string'],
             'ur' => ['nullable', 'string'],
+            'fecha_inicio' => ['nullable', 'date'],
+            'fecha_fin' => ['nullable', 'date'],
         ]);
 
         try {
@@ -1851,23 +1863,35 @@ class AdminController extends Controller
 
             $this->filtrarRegistrosPorEnlace($registrosQuery);
 
-            $registros = $registrosQuery
-                ->whereRaw('EXTRACT(YEAR FROM CREATED_AT) = ?', [(int) $anio])
-                ->orderBy('IDREGISTER', 'desc')
-                ->get();
+            $registrosQuery->whereRaw('EXTRACT(YEAR FROM CREATED_AT) = ?', [(int) $anio]);
 
             if ($request->filled('estatus')) {
-                $registros = $registros->filter(fn($r) => (string)($r->IDSTATUS ?? $r->idstatus) === $request->input('estatus'));
+                $registrosQuery->where('IDSTATUS', $request->input('estatus'));
             }
+
             if ($request->filled('enlace')) {
-                $registros = $registros->filter(fn($r) => trim((string)($r->IDENLACE ?? $r->idenlace)) === $request->input('enlace'));
+                $registrosQuery->where('IDENLACE', trim($request->input('enlace')));
             }
+
             if ($request->filled('origen')) {
-                $registros = $registros->filter(fn($r) => strtoupper(trim((string)($r->ORIGEN ?? $r->origen))) === strtoupper($request->input('origen')));
+                $registrosQuery->whereRaw('UPPER(TRIM(ORIGEN)) = ?', [strtoupper(trim($request->input('origen')))]);
             }
+
             if ($request->filled('ur')) {
-                $registros = $registros->filter(fn($r) => trim((string)($r->UR ?? $r->ur)) === $request->input('ur'));
+                $registrosQuery->where('UR', trim($request->input('ur')));
             }
+
+            if ($request->filled('fecha_inicio')) {
+                $registrosQuery->whereDate('FECHAENTREGA', '>=', $request->input('fecha_inicio'));
+            }
+
+            if ($request->filled('fecha_fin')) {
+                $registrosQuery->whereDate('FECHAENTREGA', '<=', $request->input('fecha_fin'));
+            }
+
+            $registros = $registrosQuery
+                ->orderBy('IDREGISTER', 'desc')
+                ->get();
 
             $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
             $sheet = $spreadsheet->getActiveSheet();
@@ -1895,6 +1919,7 @@ class AdminController extends Controller
                 $headers[] = 'Origen del registro';
             }
             $headers[] = 'Pensión alimenticia';
+            $headers[] = 'Fecha de entrega';
 
             $sheet->fromArray([$headers], NULL, 'A1');
 
@@ -1909,13 +1934,11 @@ class AdminController extends Controller
                 $paterno = trim($nombreDatos['apellido_paterno'] ?? '');
                 $materno = trim($nombreDatos['apellido_materno'] ?? '');
 
-                // Construir el nombre completo combinado
                 $nombreCompletoTotal = trim("{$paterno} {$materno} {$nombres}");
                 if ($nombreCompletoTotal === '') {
                     $nombreCompletoTotal = trim((string)($registro->NOMBRECOMPLETO ?? $registro->nombrecompleto ?? ''));
                 }
 
-                // Recortar a 21 caracteres exactos
                 $nombreRecortado21 = mb_substr($nombreCompletoTotal, 0, 21);
 
                 $estatusVal = (string)($registro->IDSTATUS ?? $registro->idstatus ?? '');
@@ -1929,6 +1952,9 @@ class AdminController extends Controller
 
                 $fechaReg = $registro->CREATED_AT ?? $registro->created_at ?? '';
                 $fechaFormat = $fechaReg ? date('d/m/Y', strtotime($fechaReg)) : '—';
+
+                $fechaEntregaReg = $registro->FECHAENTREGA ?? $registro->fechaentrega ?? '';
+                $fechaEntregaFormat = $fechaEntregaReg ? date('d/m/Y', strtotime($fechaEntregaReg)) : '—';
 
                 $pensionados = DB::connection('oracle_primary')
                     ->table('pensiones')
@@ -1963,6 +1989,7 @@ class AdminController extends Controller
                     $rowData[] = $origenTexto;
                 }
                 $rowData[] = $pensionStr;
+                $rowData[] = $fechaEntregaFormat;
 
                 $sheet->fromArray([$rowData], NULL, 'A' . $rowNum);
                 $rowNum++;
@@ -2067,64 +2094,58 @@ class AdminController extends Controller
         }
     }
 
-public function obtenerDocumentosUsuario($idUser)
-{
-    try {
-        $actas = Acta::where('id_user', $idUser)
-            ->get()
-            ->map(function ($acta) {
-                $id_acta = $acta->id_acta ?? $acta->ID_ACTA ?? $acta->id_Acta;
-                
-                // CORREGIDO: Debe coincidir exactamente con la ruta de Laravel (/admin/users/documentos/ver/{id})
-                // Asegúrate de incluir el prefijo '/api' si tu grupo de rutas lo requiere (ej: /api/admin/...)
-                $acta->url = '/api/admin/users/documentos/ver/' . $id_acta;
-                
-                return $acta;
-            });
+    public function obtenerDocumentosUsuario($idUser)
+    {
+        try {
+            $actas = Acta::where('id_user', $idUser)
+                ->get()
+                ->map(function ($acta) {
+                    $id_acta = $acta->id_acta ?? $acta->ID_ACTA ?? $acta->id_Acta;
+                    $acta->url = '/api/admin/users/documentos/ver/' . $id_acta;
+                    return $acta;
+                });
+            return response()->json([
+                'status' => true,
+                'data'   => $actas,
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Error al obtener el acta: ' . $e->getMessage());
 
-        return response()->json([
-            'status' => true,
-            'data'   => $actas,
-        ]);
-    } catch (\Throwable $e) {
-        Log::error('Error al obtener el acta: ' . $e->getMessage());
-
-        return response()->json([
-            'status' => false,
-            'message' => 'Ocurrió un error al obtener el acta.',
-        ], 500);
-    }
-}
-
-public function verDocumentoUsuario($id)
-{
-    try {
-        // CORREGIDO: Usar la misma variable ($acta) de forma consistente
-        $acta = Acta::find($id);
-
-        if (!$acta || !Storage::disk('actas')->exists($acta->acta)) {
             return response()->json([
                 'status' => false,
-                'message' => 'El archivo no se encuentra en el servidor.',
-            ], 404);
+                'message' => 'Ocurrió un error al obtener el acta.',
+            ], 500);
         }
-
-        $filePath = Storage::disk('actas')->path($acta->acta);
-        $mimeType = mime_content_type($filePath) ?: 'application/pdf';
-
-        return response()->file($filePath, [
-            'Content-Type' => $mimeType,
-            'Content-Disposition' => 'inline; filename="' . basename($filePath) . '"'
-        ]);
-    } catch (\Throwable $e) {
-        Log::error('Error al visualizar el documento: ' . $e->getMessage());
-
-        return response()->json([
-            'status' => false,
-            'message' => 'Ocurrió un error al cargar el archivo.',
-        ], 500);
     }
-}
+
+    public function verDocumentoUsuario($id)
+    {
+        try {
+            $acta = Acta::find($id);
+
+            if (!$acta || !Storage::disk('actas')->exists($acta->acta)) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'El archivo no se encuentra en el servidor.',
+                ], 404);
+            }
+
+            $filePath = Storage::disk('actas')->path($acta->acta);
+            $mimeType = mime_content_type($filePath) ?: 'application/pdf';
+
+            return response()->file($filePath, [
+                'Content-Type' => $mimeType,
+                'Content-Disposition' => 'inline; filename="' . basename($filePath) . '"'
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Error al visualizar el documento: ' . $e->getMessage());
+
+            return response()->json([
+                'status' => false,
+                'message' => 'Ocurrió un error al cargar el archivo.',
+            ], 500);
+        }
+    }
 
     public function guardarDocumentoUsuario(Request $request)
     {
