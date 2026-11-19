@@ -1836,6 +1836,31 @@ class AdminController extends Controller
             ], 500);
         }
     }
+
+    public function descargaInstructivos()
+    {
+        try {
+            if (!Storage::disk('public')->exists('Instructivos.pdf')) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'El archivo de instructivos no se encuentra en el servidor.',
+                ], 404);
+            }
+
+            $filePath = Storage::disk('public')->path('Instructivos.pdf');
+
+            return response()->file($filePath, [
+                'Content-Type' => 'application/pdf',
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Error al visualizar los instructivos: ' . $e->getMessage());
+
+            return response()->json([
+                'status' => false,
+                'message' => 'Ocurrió un error al cargar el archivo de instructivos.',
+            ], 500);
+        }
+    }
     public function exportarReporteExcel(Request $request)
     {
         $request->validate([

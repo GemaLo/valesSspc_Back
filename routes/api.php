@@ -59,6 +59,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/gestor/tarjetas/personas', [AdminController::class, 'guardarPersonaBeneficiaria']);
     Route::get('/gestor/tarjetas/formato-persona/{idRegister}/{idPerson}', [AdminController::class, 'descargarFormatoPersonaIndividual']);
     Route::get('/lineamientos/descargar', [AdminController::class, 'descargarLineamientos']);
+    Route::get('/instructivos/descargar', [AdminController::class, 'descargarInstructivos']);
     Route::get('/admin/reportes/exportar-excel', [AdminController::class, 'exportarReporteExcel']);
     Route::patch('/admin/documentos/{idDocument}/estatus', [AdminController::class, 'actualizarEstatusDocumento']);
     Route::get('/gestor/documentos/ver/{id}', [AdminController::class, 'verDocumento'])->name('documentos.ver');
