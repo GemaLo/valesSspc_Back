@@ -10,5 +10,5 @@ class Document extends Model
     protected $table = 'documents';
 
     protected $primaryKey = 'idDocument';
-    protected $fillable = ['document', 'idTypeDocument', 'idRegister', 'status'];
+    protected $fillable = ['document', 'idTypeDocument', 'idRegister', 'status', 'observacion'];
 }

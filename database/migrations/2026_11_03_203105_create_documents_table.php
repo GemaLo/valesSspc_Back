@@ -16,6 +16,7 @@ return new class extends Migration
             $table->unsignedBigInteger('idRegister');
             $table->foreign('idRegister')->references('idRegister')->on('registers');
             $table->boolean('status')->nullable();
+            $table->longText('observacion')->nullable();
             $table->timestamps();
         });
     }

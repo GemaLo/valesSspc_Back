@@ -29,5 +29,9 @@ class StatusSeeder extends Seeder
             'idStatus' => 4,
             'status' => 'Cancelada'
         ]);
+        DB::table('status')->insert([
+            'idStatus' => 5,
+            'status' => 'Dispersada'
+        ]);
     }
 }

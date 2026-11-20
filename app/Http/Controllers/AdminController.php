@@ -79,7 +79,7 @@ class AdminController extends Controller
     {
         $request->validate([
             'idRegister' => 'required',
-            'idStatus' => 'required|integer|in:1,2,3,4',
+            'idStatus' => 'required|integer|in:1,2,3,4,5',
         ]);
 
         try {
@@ -93,6 +93,10 @@ class AdminController extends Controller
 
             if ($nuevoEstatus === 2) {
                 $datosActualizar['FECHAENTREGA'] = now();
+            }
+
+            if ($nuevoEstatus === 5) {
+                $datosActualizar['FECHADISPERSION'] = now();
             }
 
             $afectados = DB::connection('oracle_primary')
@@ -111,13 +115,14 @@ class AdminController extends Controller
                 'status' => true,
                 'message' => 'Estatus actualizado correctamente.',
                 'fechaEntrega' => $nuevoEstatus === 2 ? now('America/Mexico_City')->toIso8601String() : null,
+                'fechaDispersion' => $nuevoEstatus === 5 ? now('America/Mexico_City')->toIso8601String() : null,
             ]);
         } catch (\Exception $e) {
             Log::error('Error al actualizar estatus: ' . $e->getMessage());
 
             return response()->json([
                 'status' => false,
-                'message' => 'Error al actualizar: ' . $e->getMessage()
+                'message' => 'Error al actualizar: ' . $e->getMessage(),
             ], 500);
         }
     }
@@ -2081,15 +2086,22 @@ class AdminController extends Controller
     {
         $request->validate([
             'status' => 'required|integer|in:0,1',
+            'observacion' => 'nullable|string|max:1000|required_if:status,0',
         ]);
 
         try {
+            $nuevoStatus = (int) $request->input('status');
+            $observacion = $nuevoStatus === 0
+                ? trim((string) $request->input('observacion'))
+                : null;
+
             $afectados = DB::connection('oracle_primary')
                 ->table('documents')
                 ->where('IDDOCUMENT', $idDocument)
                 ->update([
-                    'STATUS' => (int) $request->input('status'),
-                    'UPDATED_AT' => now()
+                    'STATUS' => $nuevoStatus,
+                    'OBSERVACION' => $observacion,
+                    'UPDATED_AT' => now(),
                 ]);
 
             if ($afectados === 0) {
