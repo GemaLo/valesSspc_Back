@@ -62,6 +62,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/admin/reportes/exportar-excel', [AdminController::class, 'exportarReporteExcel']);
     Route::patch('/admin/documentos/{idDocument}/estatus', [AdminController::class, 'actualizarEstatusDocumento']);
     Route::get('/gestor/documentos/ver/{id}', [AdminController::class, 'verDocumento'])->name('documentos.ver');
+    Route::get('/instructivos/descargar', [AdminController::class, 'descargaInstructivos']);
 
     Route::get('/admin/tipos-actas', [AdminController::class, 'obtenerTiposActas']);
     Route::get('/admin/users/{idUser}/documentos', [AdminController::class, 'obtenerDocumentosUsuario']);
@@ -73,4 +74,3 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/gestor/tarjetas/por-anio', [CardsController::class, 'obtenerTarjetasPorAnio']);
 });
 Route::middleware('auth:sanctum')->post('/change-password', [LoginController::class, 'changePassword']);
-    Route::get('/instructivos/descargar', [AdminController::class, 'descargaInstructivos']);
